@@ -91,7 +91,16 @@ namespace yal {
 
         virtual ~Module() = default;
 
-        void print(std::ostream &out, std::size_t ident = 1) const;
+        std::ostream &print() const;
+
+        std::ostream &print(std::ostream &os, 
+            const std::string &blank = " ") const;
+
+        // @return max(xpos) - min(xpos); -1 if xpos is empty
+        int xspan() const;
+
+        // @return max(ypos) - min(ypos); -1 if ypos is empty
+        int yspan() const;
 
         void clear();
 
@@ -101,14 +110,19 @@ namespace yal {
         std::vector<int> ypos;
         std::vector<Signal> iolist;
 
-     protected:
-         virtual void print_network(std::ostream &out, std::size_t ident) const;
+    protected:
+         virtual void print_network(std::ostream &os, 
+             const std::string &blank) const;
+
+    private:
+        static int span(const std::vector<int> &v);
     };
 
-    // A soft module with type = PARENT
+    // A soft module whose type is PARENT
     class ParentModule : public Module {
     public:
-        using NetworkEntry = std::tuple<std::string, std::string, std::vector<std::string>>;
+        using NetworkEntry = std::tuple<std::string, std::string, 
+            std::vector<std::string>>;
 
         ParentModule();
 
@@ -120,14 +134,16 @@ namespace yal {
 
         static const std::string &get_module_name(const NetworkEntry &ne);
 
-        static const std::vector<std::string> &get_signal_names(const NetworkEntry &ne);
+        static const std::vector<std::string> &get_signal_names(
+            const NetworkEntry &ne);
 
         void clear();
 
         std::vector<NetworkEntry> network;
 
     protected:
-        virtual void print_network(std::ostream &out, std::size_t ident) const override;
+        virtual void print_network(std::ostream &os, 
+            const std::string &blank) const override;
     };
 
 }

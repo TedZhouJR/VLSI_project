@@ -37,8 +37,8 @@ using namespace std;
 int main(int argc, char **argv) {
     Interpreter i;
     try {
-        bool res = i.parse();
-        cout << i.str() << endl;
+        bool ret = i.parse();
+        i.print() << endl;
         return EXIT_SUCCESS;
     } catch (const Parser::syntax_error &e) {
         cout << e.location << ": " << e.what() << endl;

@@ -37,13 +37,9 @@
 %define api.namespace { yal }
 %code requires
 {
-    #include <iostream>
     #include <string>
     #include <vector>
     #include <cstdint>
-	#include <stdexcept>
-	#include <sstream>
-	#include <limits>
     #include "module.h"
 
     using namespace std;
@@ -51,26 +47,6 @@
     namespace yal {
         class Scanner;
         class Interpreter;
-
-		/*
-		class SyntaxError : public std::runtime_error {
-		public:
-			SyntaxError(const std::string &msg, const location &loc) : 
-				runtime_error(msg), loc_(loc) {
-					std::ostringstream out;
-					out << "Syntax error (" << loc_ << "): " << msg;
-					what_ = out.str();
-				}
-
-			virtual const char *what() const override noexcept {
-				return what_.c_str();
-			}
-
-		private:
-			location loc_;
-			std::string what_;
-		}
-		*/
     }
 }
 
@@ -82,7 +58,6 @@
 %code top
 {
     #include <iostream>
-	#include <memory>	// for shared_ptr
     #include "scanner.h"
     #include "parser.hpp"
     #include "interpreter.h"
@@ -111,42 +86,36 @@
 %define api.token.prefix {TOKEN_}
 
 %token END 0 "end of file"
-%token <std::string> STRING  "string";
-%token <std::int32_t> INTEGER "number";
+%token <std::string> STRING  "identifier";
+%token <std::int32_t> INTEGER "integer";
 %token <double> DOUBLE "double"
 %token SEMICOLON "semicolon";
-
-%token MODULE "module";
-%token ENDMODULE "endmodule";
-%token TYPE "type";
-%token DIMENSIONS "dimensions";
-
-%token IOLIST "iolist";
-%token ENDIOLIST "endiolist";
-%token NETWORK "network";
-%token ENDNETWORK "endnetwork";
-
-%token CURRENT "current";
-%token VOLTAGE "voltage";
-
-%token STANDARD "standard";
-%token PAD "pad";
-%token GENERAL "general";
-%token PARENT "parent";
-
-%token BIDIRECTIONAL "bidirectional"
-%token PAD_INPUT "pad input"
-%token PAD_OUTPUT "pad output"
-%token PAD_BIDIRECTIONAL "pad bidirectional"
-%token FEEDTHROUGH "feedthrough"
-%token POWER "power"
-%token GROUND "ground"
-
-%token PDIFF "pdiff"
-%token NDIFF "ndiff"
-%token POLY "poly"
-%token METAL1 "metal1"
-%token METAL2 "metal2"
+%token MODULE "MODULE";
+%token ENDMODULE "ENDMODULE";
+%token TYPE "TYPE";
+%token DIMENSIONS "DIMENSIONS";
+%token IOLIST "IOLIST";
+%token ENDIOLIST "ENDIOLIST";
+%token NETWORK "NETWORK";
+%token ENDNETWORK "ENDNETWORK";
+%token CURRENT "CURRENT";
+%token VOLTAGE "VOLTAGE";
+%token STANDARD "STANDARD";
+%token PAD "PAD";
+%token GENERAL "GENERAL";
+%token PARENT "PARENT";
+%token BIDIRECTIONAL "B"
+%token PAD_INPUT "PI"
+%token PAD_OUTPUT "PO"
+%token PAD_BIDIRECTIONAL "PB"
+%token FEEDTHROUGH "F"
+%token POWER "PWR"
+%token GROUND "GND"
+%token PDIFF "PDIFF"
+%token NDIFF "NDIFF"
+%token POLY "POLY"
+%token METAL1 "METAL1"
+%token METAL2 "METAL2"
 
 %type<std::string> Head String StringOrInteger
 %type<yal::Module::ModuleType> Type ModuleType;
@@ -183,9 +152,77 @@ String		:	STRING
 				{
 					$$ = std::move($1);
 				}
-			|	GROUND
+			|	CURRENT
+				{
+					$$ = "CURRENT";
+				}
+			|	VOLTAGE 
+				{
+					$$ = "VOLTAGE";
+				}
+			|	STANDARD 
+				{
+					$$ = "STANDARD";
+				}
+			|	PAD 
+				{
+					$$ = "PAD";
+				}
+			|	GENERAL 
+				{
+					$$ = "GENERAL";
+				}
+			|	PARENT 
+				{
+					$$ = "PARENT";
+				}
+			|	BIDIRECTIONAL
+				{
+					$$ = "B";
+				}
+			|	PAD_INPUT 
+				{
+					$$ = "PI";
+				}
+			|	PAD_OUTPUT 
+				{
+					$$ = "PO";
+				}
+			|	PAD_BIDIRECTIONAL
+				{
+					$$ = "PB";	
+				}
+			|	FEEDTHROUGH 
+				{
+					$$ = "F";
+				}
+			|	POWER 
+				{
+					$$ = "PWR";
+				}
+			|	GROUND 
 				{
 					$$ = "GND";
+				}
+			|	PDIFF 
+				{
+					$$ = "PDIFF";
+				}
+			|	NDIFF 
+				{
+					$$ = "NDIFF";
+				}
+			|	POLY 
+				{
+					$$ = "POLY";
+				}
+			|	METAL1 
+				{
+					$$ = "METAL1";
+				}
+			|	METAL2
+				{
+					$$ = "METAL2";
 				}
 			;
 
@@ -199,15 +236,15 @@ Double		:	DOUBLE
 				}
 			;
 
-StringOrInteger:	String
-				{
-					$$ = std::move($1);
-				}
-			|	INTEGER
-				{
-					$$ = std::to_string($1);
-				}
-			;
+StringOrInteger	:	String
+					{
+						$$ = std::move($1);
+					}
+				|	INTEGER
+					{
+						$$ = std::to_string($1);
+					}
+				;
 
 Head		:	MODULE String SEMICOLON
 				{
@@ -246,14 +283,14 @@ Dimensions	:	DIMENSIONS DimensionList SEMICOLON
 			|	// empty
 			;
 
-DimensionList:	DimensionList INTEGER INTEGER
-				{
-					$$ = std::move($1);
-					$$.first.push_back($2);
-					$$.second.push_back($3);
-				}
-			|	// empty
-			;
+DimensionList	:	DimensionList INTEGER INTEGER
+					{
+						$$ = std::move($1);
+						$$.first.push_back($2);
+						$$.second.push_back($3);
+					}
+				|	// empty
+				;
 
 Iolist		:	IOLIST SEMICOLON IolistBody ENDIOLIST SEMICOLON
 				{

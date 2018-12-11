@@ -76,7 +76,6 @@
 			}
 
 IOLIST		{
-				// cout << "iolist detected" << endl;
 				return yal::Parser::make_IOLIST(yal::location(m_driver.location())); 
 			}
 
@@ -181,14 +180,10 @@ METAL2		{
 			}
 
 [a-zA-Z][a-zA-Z0-9_]*	{ 
-                // cout << "Scanner: identifier [" << yytext << "]" << endl;
-                return yal::Parser::make_STRING(yytext, 
-					yal::location(m_driver.location()	// put location data here if you want
-				)); 
+                return yal::Parser::make_STRING(yytext, yal::location(m_driver.location())); 
 			 }
             
 ;           {
-                // cout << "Scanner: ';'" << endl;
                 return yal::Parser::make_SEMICOLON(yal::location(m_driver.location()));
             }
 
@@ -196,10 +191,8 @@ METAL2		{
 				m_driver.lines();			
 			}
             
-[\r\t ]		{
-                // cout << "Scanner: whitechar (ignored)" << endl;
-            }
-
+[\r\t ]		{	/* ignore whitespace */		}
+	
 [-+]?([1-9][0-9]*|0)	{
 				std::int32_t number = strtol(yytext, 0, 10);
 				return yal::Parser::make_INTEGER(number, yal::location(m_driver.location()));
@@ -211,7 +204,8 @@ METAL2		{
 			}
 
 .           { 
-                cout << "Scanner: unknown character [" << yytext << "]" << endl; 
+				m_driver.m_parser.error(m_driver.location(), 
+					std::string("Unknown character ") + yytext);
             }
             
 <<EOF>>     {	return yyterminate();	}

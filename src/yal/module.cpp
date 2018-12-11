@@ -30,7 +30,10 @@
 // Author: LYL
 
 #include "module.h"
+#include <algorithm>
+#include <cassert>
 #include <cmath>
+#include <iostream>
 
 using namespace yal;
 
@@ -39,102 +42,115 @@ Module::Module(const std::string & name, ModuleType type,
     const std::vector<Signal>& iolist) : name(name), type(type),
     xpos(xpos), ypos(ypos), iolist(iolist) {}
 
-void Module::print(std::ostream & out, std::size_t ident) const {
+std::ostream & Module::print() const {
+    return print(std::cout);
+}
+
+std::ostream & Module::print(std::ostream & os, 
+    const std::string &blank) const {
     // MODULE
-    std::string blank(ident, ' ');
-    out << "MODULE " << name << ";\n";
+    os << "MODULE " << name << ";\n";
 
     // TYPE
-    out << blank << "TYPE ";
+    os << blank << "TYPE ";
     switch (type) {
     case Module::ModuleType::GENERAL:
-        out << "GENERAL";
+        os << "GENERAL";
         break;
     case Module::ModuleType::PAD:
-        out << "PAD";
+        os << "PAD";
         break;
     case Module::ModuleType::PARENT:
-        out << "PARENT";
+        os << "PARENT";
         break;
     case Module::ModuleType::STANDARD:
-        out << "STANDARD";
+        os << "STANDARD";
         break;
     default:
-        ;
+        assert(false);
     }
-    out << ";\n";
+    os << ";\n";
 
     // DIMENSIONS
-    out << blank << "DIMENSIONS";
+    os << blank << "DIMENSIONS";
     for (std::size_t i = 0; i != xpos.size(); ++i)
-        out << " " << xpos[i] << " " << ypos[i];
-    out << ";\n";
+        os << " " << xpos[i] << " " << ypos[i];
+    os << ";\n";
 
     // IOLIST
-    out << blank << "IOLIST;\n";
+    os << blank << "IOLIST;\n";
     for (const Signal &s : iolist) {
-        out << blank << blank;
-        out << s.name << " ";
+        os << blank << blank;
+        os << s.name << " ";
         switch (s.terminal_type) {
         case Signal::TerminalType::BIDIRECTIONAL:
-            out << "B";
+            os << "B";
             break;
         case Signal::TerminalType::FEEDTHROUGH:
-            out << "F";
+            os << "F";
             break;
         case Signal::TerminalType::GROUND:
-            out << "GND";
+            os << "GND";
             break;
         case Signal::TerminalType::PAD_BIDIRECTIONAL:
-            out << "PB";
+            os << "PB";
             break;
         case Signal::TerminalType::PAD_INPUT:
-            out << "PI";
+            os << "PI";
             break;
         case Signal::TerminalType::PAD_OUTPUT:
-            out << "PO";
+            os << "PO";
             break;
         case Signal::TerminalType::POWER:
-            out << "PWR";
+            os << "PWR";
             break;
         default:
-            ;
+            assert(false);
         }
 
-        out << " " << s.xpos << " " << s.ypos << " " << s.width << " ";
+        os << " " << s.xpos << " " << s.ypos << " " << s.width << " ";
         switch (s.layer_type) {
         case Signal::LayerType::METAL1:
-            out << "METAL1";
+            os << "METAL1";
             break;
         case Signal::LayerType::METAL2:
-            out << "METAL2";
+            os << "METAL2";
             break;
         case Signal::LayerType::NDIFF:
-            out << "NDIFF";
+            os << "NDIFF";
             break;
         case Signal::LayerType::PDIFF:
-            out << "PDIFF";
+            os << "PDIFF";
             break;
         case Signal::LayerType::POLY:
-            out << "POLY";
+            os << "POLY";
             break;
         default:
-            ;
+            assert(false);
         }
 
         if (s.is_current_defined())
-            out << " CURRENT " << s.current;
+            os << " CURRENT " << s.current;
         if (s.is_voltage_defined())
-            out << " VOLTAGE " << s.voltage;
-        out << ";\n";
+            os << " VOLTAGE " << s.voltage;
+        os << ";\n";
     }
 
-    out << blank << "ENDIOLIST;\n";
+    os << blank << "ENDIOLIST;\n";
 
     // NETWORK if parent module
-    print_network(out, ident);
+    print_network(os, blank);
 
-    out << "ENDMODULE;\n";
+    os << "ENDMODULE;\n";
+    return os;
+}
+
+int yal::Module::xspan() const {
+    return span(xpos);
+}
+
+int yal::Module::yspan() const {
+    return span(ypos);
 }
 
 void Module::clear() {
@@ -144,9 +160,15 @@ void Module::clear() {
     iolist.clear();
 }
 
-void Module::print_network(std::ostream & out, 
-    std::size_t ident) const {
+void Module::print_network(std::ostream & os, 
+    const std::string & blank) const {
+}
 
+int yal::Module::span(const std::vector<int>& v) {
+    if (v.empty())
+        return -1;
+    auto iters = std::minmax_element(v.begin(), v.end());
+    return *iters.second - *iters.first;
 }
 
 ParentModule::ParentModule() : Module() {
@@ -181,18 +203,17 @@ void ParentModule::clear() {
     network.clear();
 }
 
-void ParentModule::print_network(std::ostream & out, 
-    std::size_t ident) const {
-    std::string blank(ident, ' ');
-    out << blank << "NETWORK;\n";
+void ParentModule::print_network(std::ostream & os, 
+    const std::string & blank) const {
+    os << blank << "NETWORK;\n";
     for (const ParentModule::NetworkEntry &ne : network) {
-        out << blank << blank << ParentModule::get_instance_name(ne);
-        out << " " << ParentModule::get_module_name(ne);
+        os << blank << blank << ParentModule::get_instance_name(ne);
+        os << " " << ParentModule::get_module_name(ne);
         for (const std::string &sig : ParentModule::get_signal_names(ne))
-            out << " " << sig;
-        out << ";\n";
+            os << " " << sig;
+        os << ";\n";
     }
-    out << blank << "ENDNETWORK;\n";
+    os << blank << "ENDNETWORK;\n";
 }
 
 Signal::Signal() : current(NaN()), voltage(NaN()) {}

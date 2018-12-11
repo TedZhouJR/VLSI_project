@@ -28,13 +28,16 @@
 
 #include "interpreter.h"
 #include "module.h"
-#include <sstream>
 
 using namespace yal;
 
 Interpreter::Interpreter() :
     m_scanner(*this),
     m_parser(m_scanner, *this) {
+}
+
+Interpreter::Interpreter(std::istream & is) : Interpreter() {
+    switch_input_stream(is);
 }
 
 bool Interpreter::parse() {
@@ -47,12 +50,17 @@ void Interpreter::clear() {
     m_parent.clear();
 }
 
-std::string Interpreter::str() const {
-    std::stringstream s;
+std::ostream & Interpreter::print() const {
+    return print(std::cout);
+}
+
+std::ostream & Interpreter::print(std::ostream & os, 
+    const std::string & blank) const {
     for (const Module &m : m_modules)
-        m.print(s);
-    m_parent.print(s);
-    return s.str();
+        m.print(os, blank);
+    if (!m_parent.name.empty())
+        m_parent.print(os, blank);
+    return os;
 }
 
 void Interpreter::switch_input_stream(std::istream &is) {
