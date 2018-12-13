@@ -2,3 +2,7 @@
 .o
 .obj
 .log
+/bin/polish
+interpreter
+/bin/test_tree
+sa.xcodeproj
