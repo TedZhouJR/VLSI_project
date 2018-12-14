@@ -27,10 +27,14 @@ namespace polish {
         explicit meta_polish_node(combine_type type_in) : 
             type(type_in) {}
 
-        static combine_type invert_combine_type(combine_type c) {
+        static combine_type invert_combine_type(combine_type c) noexcept {
             return c == combine_type::LEAF ?
                 combine_type::LEAF : c == combine_type::HORIZONTAL ?
                 combine_type::VERTICAL : combine_type::HORIZONTAL;
+        }
+
+        void invert_combine_type() noexcept {
+            type = invert_combine_type(type);
         }
     };
 
@@ -47,6 +51,9 @@ namespace polish {
 
         dimension_type height;
         dimension_type width;
+
+        basic_polish_node(combine_type type_in) : 
+            basic_polish_node(type_in, 0, 0) {}
 
         basic_polish_node(combine_type type_in, dimension_type height_in,
             dimension_type width_in) : base(type_in), height(height_in), 
@@ -155,9 +162,19 @@ namespace polish {
             }
         }
 
-        bool check_area(const self &lc, const self &rc) {
+        bool check_area(const self &lc, const self &rc) const {
+            if (!check_curve())
+                return false;
             auto tmp = *this;
             tmp.count_area(lc, rc);
+            if (points != tmp.points)
+                return false;
+            self lst[2] = { lc, rc };
+            for (self &t : lst)
+                t.mirror_curve();
+            tmp.invert_combine_type();
+            tmp.count_area(lst[0], lst[1]);
+            tmp.mirror_curve();
             return points == tmp.points;
         }
 
@@ -165,6 +182,19 @@ namespace polish {
 
     private:
         basic_vectorized_polish_node() : base(combine_type::LEAF) {}
+
+        void mirror_curve() {
+            for (coord_type &e : points)
+                std::swap(e.first, e.second);
+            std::reverse(points.begin(), points.end());
+        }
+
+        bool check_curve() const {
+            return std::adjacent_find(points.begin(), points.end(), 
+                [](const coord_type &a, const coord_type &b) {
+                return a.first >= b.first || a.second <= b.second;
+            }) == points.end();
+        }
     };
 
     template<typename Alloc>
