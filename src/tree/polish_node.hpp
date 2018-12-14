@@ -40,6 +40,7 @@ namespace polish {
         using self = polish_node;
 
     public:
+        using combine_type = typename base::combine_type;
         using dimension_type = typename base::dimension_type;
         using size_type = typename base::size_type;
 

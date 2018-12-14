@@ -15,9 +15,10 @@ namespace polish {
 
     namespace expression {
         // Polish expression is a sequence of integers, each representing
-        // either an operator (HORIZONTAL_COMBINE or VERTICAL_COMBINE) 
+        // either an operator (COMBINE_HORIZONTAL or COMBINE_VERTICAL) 
         // or a non-negative module index.
-        using polish_expression_type = int;
+        using polish_expression_type 
+            = std::make_signed_t<typename polish_node::size_type>;
         constexpr polish_expression_type COMBINE_HORIZONTAL = -1;
         constexpr polish_expression_type COMBINE_VERTICAL = -2;
     }
@@ -52,6 +53,7 @@ namespace polish {
 
         self &operator++() {
             ptr_ = ptr_->next();
+            return *this;
         }
 
         self operator++(int) {
@@ -62,6 +64,7 @@ namespace polish {
 
         self &operator--() {
             ptr_ = ptr_->prev();
+            return *this;
         }
 
         self operator--(int) {
@@ -96,7 +99,6 @@ namespace polish {
         using node_type = polish_node;
         using value_type = basic_polish_node;
         using size_type = typename polish_node::size_type;
-
         using iterator = polish_tree_const_iterator;
         using const_iterator = polish_tree_const_iterator;
 
@@ -135,16 +137,26 @@ namespace polish {
 
         // Construct tree with a list of modules and a polish expression.
         // e.g., size(modules) == 3, expr == {0, 1, *, 1, +, 2, *}.
-        // Can be templated if necessary.
-        bool construct(const std::vector<yal::Module> &modules, 
+        bool construct(const std::vector<yal::Module> &modules,
             const std::vector<expression::polish_expression_type> &expr) {
+            return construct(modules.begin(), expr.begin(), expr.end());
+        }
+
+        // Construct tree with a list of modules and a polish expression.
+        template<typename RanIt, typename InIt>
+        bool construct(RanIt first_module, InIt first_expr, InIt last_expr) {
             std::vector<node_type *> stack;
-            stack.reserve(expr.size());
+            if (std::is_convertible<
+                typename std::iterator_traits<InIt>::iterator_category,
+                std::forward_iterator_tag>::value)
+                stack.reserve(std::distance(first_expr, last_expr));
             bool pass = true;
 
-            for (expression::polish_expression_type e : expr) {
-                if (e != expression::COMBINE_HORIZONTAL && e != expression::COMBINE_VERTICAL) {
-                    const yal::Module &m = modules[e];
+            for (; first_expr != last_expr; ++first_expr) {
+                expression::polish_expression_type e = *first_expr;
+                if (e != expression::COMBINE_HORIZONTAL 
+                    && e != expression::COMBINE_VERTICAL) {
+                    const yal::Module &m = first_module[e];
                     stack.push_back(new_node(combine_type::LEAF, m.yspan(), m.xspan()));
                 } else {
                     if (stack.size() < 2) {
@@ -172,7 +184,7 @@ namespace polish {
                 attach_left(header_, stack.back());
             } else {
                 for (node_type *p : stack)
-                    delete_node(p);
+                    clear_tree(p);
             }
             return pass;
         }
@@ -209,8 +221,9 @@ namespace polish {
         }
 
         // Conduct M1 / M3 change. 
-        // NOTE: if pos2 is not a leaf, then pos1 == std::prev(pos2) (in O(1)).
-        // @require pos1 <= pos2.
+        // NOTE: if we want to do leaf-operator swap, 
+        // then pos1 == std::prev(pos2) (in O(1)).
+        // @require pos1 <= pos2; if M3, pos1 == std::prev(pos2)
         // @return true iff operation valid
         bool swap_nodes(const_iterator pos1, const_iterator pos2) {
             if (pos1 == pos2 || pos1 == end() || pos2 == end())
@@ -326,6 +339,12 @@ namespace polish {
             return t->is_leaf();
         }
 
+        static void count_size(node_type *t, std::true_type) noexcept {
+            t->count_size();
+        }
+
+        static void count_size(node_type *t, std::false_type) noexcept {}
+
         // Get node with post-order index.
         const node_type *get_impl(const node_type *t, size_type offset) const {
             assert(t && offset < t->size);
@@ -343,7 +362,9 @@ namespace polish {
         }
 
         // Update down-top from non-leaf node t.
-        void update_downtop(node_type *t) {
+        template<bool B>
+        void update_downtop(node_type *t, 
+            std::integral_constant<bool, B> update_size) {
             assert(!is_leaf(t));
             while (t != header_) {
                 t->count_area();
@@ -354,18 +375,20 @@ namespace polish {
 
         // Update down-top simultaneously from non-leaf nodes t1 and t2.
         // Some nodes along the path may be updated twice.
-        void update_downtop(node_type *t1, node_type *t2) {
+        template<bool B>
+        void update_downtop(node_type *t1, node_type *t2,
+            std::integral_constant<bool, B> update_size) {
             assert(!is_leaf(t1) && !is_leaf(t2));
             while (t1 != header_ && t2 != header_) {
                 t1->count_area();
-                t1->count_size();
+                count_size(t1, update_size);
                 t2->count_area();
-                t2->count_size();
+                count_size(t2, update_size);
                 t1 = t1->parent;
                 t2 = t2->parent;
             }
-            update_downtop(t1);
-            update_downtop(t2);
+            update_downtop(t1, update_size);
+            update_downtop(t2, update_size);
         }
 
         void swap_leaves(node_type *t1, node_type *t2) {
@@ -374,10 +397,11 @@ namespace polish {
             (t1 == p1->lc ? p1->lc : p1->rc) = t2;
             t1->parent = p2;
             t2->parent = p1;
-            update_downtop(p1, p2);
+            update_downtop(p1, p2, std::false_type());
         }
 
         // Conduct M3 change, given post-order index(t2) - index(t1) == 1.
+        // case a:
         //           |
         //           p1
         //         /    \  
@@ -388,6 +412,13 @@ namespace polish {
         //            p2 ...
         //           / \
         //          t2  ...
+        // case b:
+        //           |
+        //           p1
+        //         /    \  
+        //      t1        t2
+        //     /  \     
+        //   ...  ...  
         // @param t1 operator
         // @param t2 leaf
         // @return true (always)
@@ -400,14 +431,15 @@ namespace polish {
             t1->lc = t1->rc;
             attach_right(t1, t2);
             if (p1 != p2)  
-                attach_left(p2, t1);
+                attach_left(p2, t1);    // case a
             else
-                attach_right(p2, t1);   // not the graph above!
-            update_downtop(t1);     // one-way update should suffice
+                attach_right(p2, t1);   // case b
+            update_downtop(t1, std::true_type()); // one-way update should suffice
             return true;
         }
 
         // Conduct M3 change, given post-order index(t2) - index(t1) == 1.
+        // case a:
         //            |  
         //           ca
         //         /     \  
@@ -418,6 +450,13 @@ namespace polish {
         //            t2
         //           /  \
         //         ...   t1
+        // case b:
+        //            |  
+        //           ca
+        //         /     \  
+        //      pre       t2
+        //     /  \      /  \
+        //   ...  ...  ...   t1
         // @param t1 leaf
         // @param t2 operator
         // @return true iff operation valid
@@ -434,13 +473,14 @@ namespace polish {
             }
             pre = ca->lc;
             if (t2->parent != ca)
-                attach_left(t2->parent, t1);
+                attach_left(t2->parent, t1);    // case a
             else
-                attach_right(t2->parent, t1);   // not the graph above!
+                attach_right(t2->parent, t1);   // case b
             t2->rc = t2->lc;
             attach_left(t2, pre);
             attach_left(ca, t2);
-            update_downtop(t2, t1->parent); // NOTE: sometimes one-way update suffices
+            // NOTE: sometimes one-way update suffices
+            update_downtop(t2, t1->parent, std::true_type());
             return true;
         }
 

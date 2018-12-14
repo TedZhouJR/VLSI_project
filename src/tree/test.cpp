@@ -92,6 +92,8 @@ namespace {
             modules_.resize(1);
             if (!(sz & 1))
                 ++sz;
+            if (sz < 3)
+                sz = 3;
             expr_.assign(sz, 0);
             {
                 int state = -1;
@@ -115,6 +117,8 @@ namespace {
             modules_.resize(1);
             if (!(sz & 1))
                 ++sz;
+            if (sz < 3)
+                sz = 3;
             expr_.assign(sz, 0);
             for (auto i = sz / 2 + 1; i != sz; ++i) {
                 expr_[i] = (i & 1) ? expression::COMBINE_HORIZONTAL
@@ -216,10 +220,11 @@ namespace {
 }
 
 int main(int argc, char **argv) {
-    cout << "Hello" << endl;
+    cout << "Start testing..." << endl;
     TestCase testcase;
     testcase.test_basic();
     testcase.test_m3_0();
     testcase.test_m3_1();
+    cout << "All tests passed!" << endl;
     return 0;
 }
