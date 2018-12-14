@@ -15,6 +15,8 @@ using namespace std;
 using namespace polish;
 
 #define MY_ASSERT(expr) !!(expr) || error(#expr, __LINE__)
+#define SHOW_STARTING_TEST() do { \
+cout << "Starting " << __FUNCTION__ << "..." << endl; } while (false)
 
 namespace {
 
@@ -33,6 +35,7 @@ namespace {
         TestCase() : eng_(std::random_device{}()), line_(80, '-') {}
 
         void test_basic() {
+            SHOW_STARTING_TEST();
             yal::Module m;
             m.xpos.push_back(0);
             m.ypos.push_back(0);
@@ -88,6 +91,7 @@ namespace {
 
         void test_m3_0(typename tree_type::size_type sz = 33, 
             std::size_t times = 16) {
+            SHOW_STARTING_TEST();
             // Construct a left-leaning tree.
             modules_.resize(1);
             if (!(sz & 1))
@@ -113,6 +117,7 @@ namespace {
 
         void test_m3_1(typename tree_type::size_type sz = 33, 
             std::size_t times = 16) {
+            SHOW_STARTING_TEST();
             // Construct a right-leaning tree.
             modules_.resize(1);
             if (!(sz & 1))
@@ -126,6 +131,30 @@ namespace {
             }
             
             test_m3_impl(times);
+        }
+
+        void test_curve() {
+            SHOW_STARTING_TEST();
+            std::allocator<typename polish::meta_polish_node::coord_type> alloc;
+            polish::basic_vectorized_polish_node<> p(combine_type::VERTICAL, alloc),
+                lc(combine_type::LEAF, alloc), rc(combine_type::LEAF, alloc);
+            lc.points = {{1, 5}, {3, 2}, {5, 0}};
+            rc.points = {{2, 3}, {4, 1}, {5, 0}};
+
+            cout << "Curve f:" << endl;
+            print_coord_list(lc.points) << endl;
+            cout << "Curve g:" << endl;
+            print_coord_list(rc.points) << endl;
+
+            for (auto type : { combine_type::VERTICAL, combine_type::HORIZONTAL }) {
+                p.type = type;
+                p.count_area(lc, rc);
+                cout << "f " << (type == combine_type::VERTICAL ? "+" : "*") 
+                    << " g:" << endl;
+                print_coord_list(p.points) << endl;
+            }
+
+            cout << line_ << endl;
         }
 
     private:
@@ -156,6 +185,14 @@ namespace {
             auto prefix_oprerators = 1 + std::count_if(t.begin(), q,
                 [](const auto &e) { return e.type != combine_type::LEAF; });
             return 2 * prefix_oprerators < i + 1;
+        }
+
+        template<typename Cont>
+        static std::ostream &print_coord_list(Cont &&cont, 
+            std::ostream &os = std::cout) {
+            for (auto &&e : cont)
+                cout << "(" << e.first << "," << e.second << ") ";
+            return os;
         }
 
         bool test_traversal(const tree_type &t) {
@@ -225,6 +262,7 @@ int main(int argc, char **argv) {
     testcase.test_basic();
     testcase.test_m3_0();
     testcase.test_m3_1();
+    testcase.test_curve();
     cout << "All tests passed!" << endl;
     return 0;
 }

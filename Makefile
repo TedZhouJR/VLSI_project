@@ -4,43 +4,43 @@ CPPFLAGS =
 CXXFLAGS = -std=c++14 -g
 
 SRC_DIR = ./src
-TREE_SRC_DIR = $(SRC_DIR)/tree
+POLISH_SRC_DIR = $(SRC_DIR)/polish
 YAL_SRC_DIR = $(SRC_DIR)/yal
-#INCL_DIR_LIST = $(TREE_SRC_DIR) $(YAL_SRC_DIR)
 
 BIN_DIR = ./bin
-TREE_BIN_DIR = $(BIN_DIR)/tree
+POLISH_BIN_DIR = $(BIN_DIR)/polish
 YAL_BIN_DIR = $(BIN_DIR)/yal
 
-TREE_SRC_LIST = $(wildcard $(TREE_SRC_DIR)/*.cpp)
-TREE_OBJ_LIST = $(addprefix $(TREE_BIN_DIR)/, $(notdir $(TREE_SRC_LIST:.cpp=.o)))
-TREE_TEST_OBJ = $(TREE_BIN_DIR)/test.o
+POLISH_SRC_LIST = $(wildcard $(POLISH_SRC_DIR)/*.cpp)
+POLISH_OBJ_LIST = $(addprefix $(POLISH_BIN_DIR)/, $(notdir $(POLISH_SRC_LIST:.cpp=.o)))
+POLISH_TEST_OBJ = $(POLISH_BIN_DIR)/test.o
 
-PROG = polish
+PROG = main
 TARGET = $(BIN_DIR)/$(PROG)
-TREE_TEST = $(BIN_DIR)/test_tree
+POLISH_TEST = $(BIN_DIR)/test_polish
 
 .PHONY: all, clean
 
-all: $(TARGET) $(TREE_TEST)
+all: $(TARGET) $(POLISH_TEST)
 
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp
-	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(TREE_SRC_DIR) -I $(YAL_SRC_DIR) $^ -o $@ 
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(POLISH_SRC_DIR) -I $(YAL_SRC_DIR) $^ -o $@ 
 
-$(TREE_BIN_DIR)/%.o: $(TREE_SRC_DIR)/%.cpp
+$(POLISH_BIN_DIR)/%.o: $(POLISH_SRC_DIR)/%.cpp
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(YAL_SRC_DIR) $^ -o $@ 
 
 $(YAL_BIN_DIR)/module.o: $(YAL_SRC_DIR)/module.cpp
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $^ -o $@
 
-$(TARGET): $(BIN_DIR)/main.o $(filter-out $(TREE_TEST_OBJ), $(TREE_OBJ_LIST)) $(YAL_BIN_DIR)/module.o
+$(TARGET): $(BIN_DIR)/main.o $(filter-out $(POLISH_TEST_OBJ), $(POLISH_OBJ_LIST)) $(YAL_BIN_DIR)/module.o
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@
 
-$(TREE_TEST): $(TREE_OBJ_LIST) $(YAL_BIN_DIR)/module.o
+$(POLISH_TEST): $(POLISH_OBJ_LIST) $(YAL_BIN_DIR)/module.o
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@
 
 clean:
-	rm -f $(TREE_BIN_DIR)/*.o
+	rm -f $(POLISH_BIN_DIR)/*.o
 	rm -f $(YAL_BIN_DIR)/*.o
 	rm -f $(BIN_DIR)/*.o
 	rm -f $(TARGET)
+	rm -f $(POLISH_TEST)
