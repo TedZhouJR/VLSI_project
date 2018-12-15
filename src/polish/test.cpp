@@ -5,6 +5,7 @@
 #include <cassert>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <numeric>
 #include <random>
 #include <string>
@@ -107,6 +108,43 @@ namespace {
                 MY_ASSERT(w == root->width && h == root->height);
             }
             MY_ASSERT(!tree_.rotate_leaf(tree_.end()));
+            cout << line_ << endl;
+        }
+
+        void test_tree_floorplan() {
+            SHOW_STARTING_TEST();
+            load_basic();
+            tree_.construct(modules_, expr_);
+            print_tree(tree_) << endl;
+            auto root = std::prev(tree_.end());
+            vector<typename tree_type::floorplan_entry> result;
+            tree_.floorplan(std::back_inserter(result));
+            cout << "Placement (" << root->width << ","
+                << root->height << "):" << endl;
+            print_coord_list(result) << endl;
+            cout << line_ << endl;
+        }
+
+        void test_vtree_floorplan() {
+            SHOW_STARTING_TEST();
+            load_basic();
+            vtree_.construct(modules_, expr_);
+            print_tree(vtree_) << endl;
+            cout << "Curve function:" << endl;
+            auto root = std::prev(vtree_.end());
+            print_coord_list(root->points) << endl;
+            vector<typename vctr_tree_type::floorplan_entry> result;
+            for (size_t i = 0; i != root->points.size(); ++i) {
+                result.clear();
+                vtree_.floorplan(i, std::back_inserter(result));
+                cout << "Placement (" << root->points[i].first << "," 
+                    << root->points[i].second << "):" << endl;
+                for (auto &&e : result) {
+                    cout << "(" << std::get<0>(e) << "," << std::get<1>(e)
+                        << ") " << std::get<2>(e) << "*" << std::get<3>(e) << " ";
+                }
+                cout << endl;
+            }
             cout << line_ << endl;
         }
 
@@ -334,6 +372,8 @@ int main(int argc, char **argv) {
     testcase.test_tree_m3_1();
     testcase.test_vtree_m3_1();
     testcase.test_tree_rotate_leaf();
+    testcase.test_tree_floorplan();
+    testcase.test_vtree_floorplan();
     cout << "All tests passed!" << endl;
     return 0;
 }

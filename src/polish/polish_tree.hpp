@@ -30,6 +30,7 @@ namespace polish {
         struct node_traits<basic_polish_node> {
             using value_type = basic_polish_node;
             using node_type = polish_node;
+            using coord_type = typename node_type::coord_type;
             using combine_type = typename node_type::combine_type;
             using dimension_type = typename node_type::dimension_type;
 
@@ -51,13 +52,14 @@ namespace polish {
         struct node_traits<basic_vectorized_polish_node<Al>> {
             using value_type = basic_vectorized_polish_node<Al>;
             using node_type = vectorized_polish_node<Al>;
+            using coord_type = typename node_type::coord_type;
             using combine_type = typename node_type::combine_type;
             using dimension_type = typename node_type::dimension_type;
 
             template<typename Alloc>
             static void placement_new_leaf(node_type *ptr,
                 const yal::Module &m, Alloc &&alloc) {
-                ::new (ptr) node_type(meta_polish_node::combine_type::LEAF, 
+                ::new (ptr) node_type(meta_polish_node::combine_type::LEAF,
                     std::forward<Alloc>(alloc));
                 auto xspan = m.xspan(), yspan = m.yspan();
                 if (xspan > yspan)
@@ -161,6 +163,7 @@ namespace polish {
 
     public:
         using combine_type = typename traits::combine_type;
+        using coord_type = typename traits::coord_type;
         using dimension_type = typename traits::dimension_type;
         using value_type = typename traits::value_type;
         
@@ -564,6 +567,7 @@ namespace polish {
 
     public:
         using typename base::combine_type;
+        using typename base::coord_type;
         using typename base::dimension_type;
         using typename base::value_type;
         using typename base::allocator_type;
@@ -575,6 +579,8 @@ namespace polish {
         using typename base::difference_type;
         using typename base::const_pointer;
         using typename base::pointer;
+
+        using floorplan_entry = coord_type;
 
         using slicing_tree<basic_polish_node, Alloc>::slicing_tree;
 
@@ -591,6 +597,31 @@ namespace polish {
             return true;
         }
 
+        // Settle lower-left positions of all modules.
+        // Each output is a (x, y) pair (floorplan_entry).
+        template<typename OutIt>
+        OutIt floorplan(OutIt dst, dimension_type xoff = 0, 
+            dimension_type yoff = 0) const {
+            return this->empty() ? dst :
+                floorplan_impl(this->header_->lc(), xoff, yoff, dst);
+        }
+
+    protected:
+        template<typename OutIt>
+        static OutIt floorplan_impl(const node_type *t,
+            dimension_type xoff, dimension_type yoff, OutIt dst) {
+            assert(t);
+            if (t->type == combine_type::VERTICAL) {
+                dst = floorplan_impl(t->lc(), xoff, yoff, dst);
+                dst = floorplan_impl(t->rc(), xoff, yoff + t->lc()->height, dst);
+            } else if (t->type == combine_type::HORIZONTAL) {
+                dst = floorplan_impl(t->lc(), xoff, yoff, dst);
+                dst = floorplan_impl(t->rc(), xoff + t->lc()->width, yoff, dst);
+            } else {
+                *dst++ = std::make_pair(xoff, yoff);
+            }
+            return dst;
+        }
     };
 
     // A vectorized_polish_tree is a tree of 
@@ -599,8 +630,103 @@ namespace polish {
     template<typename Alloc = std::allocator<
         basic_vectorized_polish_node<
         std::allocator<meta_polish_node::coord_type>>>>
-    using vectorized_polish_tree = slicing_tree<
-        typename std::allocator_traits<Alloc>::value_type, Alloc>;
-}
+    class vectorized_polish_tree : public slicing_tree<
+        typename std::allocator_traits<Alloc>::value_type, Alloc> {
+        using self = vectorized_polish_tree;
+        using base = slicing_tree<
+            typename std::allocator_traits<Alloc>::value_type, Alloc>;
+
+    protected:
+        using typename base::traits;
+        using typename base::alloc_traits;
+        using typename base::node_type;
+
+    public:
+        using typename base::combine_type;
+        using typename base::coord_type;
+        using typename base::dimension_type;
+        using typename base::value_type;
+        using typename base::allocator_type;
+        using typename base::iterator;
+        using typename base::const_iterator;
+        using typename base::const_reference;
+        using typename base::reference;
+        using typename base::size_type;
+        using typename base::difference_type;
+        using typename base::const_pointer;
+        using typename base::pointer;
+
+        using floorplan_entry = std::tuple<dimension_type, 
+            dimension_type, dimension_type, dimension_type>;
+
+        using slicing_tree<
+            typename std::allocator_traits<Alloc>::value_type, 
+            Alloc>::slicing_tree;
+
+        // Settle lower-left positions of all modules, 
+        // using the kth point of root's curve function.
+        // Each output is a (x, y, w, h) tuple (floorplan_entry).
+        template<typename OutIt>
+        OutIt floorplan(std::size_t k, OutIt dst,
+            dimension_type xoff = 0, dimension_type yoff = 0) const {
+            return this->empty() ? dst :
+                floorplan_impl(this->header_->lc(), k, xoff, yoff, dst);
+        }
+
+    protected:
+        template<typename OutIt>
+        static OutIt floorplan_impl(const node_type *t, std::size_t k,
+            dimension_type xoff, dimension_type yoff, OutIt dst) {
+            assert(t && k < t->points.size());
+            const auto &shape = t->points[k];
+            if (t->type == combine_type::LEAF) {
+                *dst++ = std::make_tuple(xoff, yoff, shape.first, shape.second);
+                return dst;
+            }
+
+            if (t->type == combine_type::VERTICAL) {
+                auto lpos = std::lower_bound(t->lc()->points.cbegin(),
+                    t->lc()->points.cend(), shape,
+                    [](const coord_type &a, const coord_type &b) {
+                    return a.first < b.first;
+                });
+                if (lpos == t->lc()->points.cend())
+                    --lpos;
+                auto rpos = std::lower_bound(t->rc()->points.cbegin(),
+                    t->rc()->points.cend(), shape,
+                    [](const coord_type &a, const coord_type &b) {
+                    return a.first < b.first;
+                });
+                if (rpos == t->rc()->points.cend())
+                    --rpos;
+                dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(), 
+                    xoff, yoff, dst);
+                dst = floorplan_impl(t->rc(), rpos - t->rc()->points.cbegin(),
+                    xoff, yoff + lpos->second, dst);
+            } else {
+                auto lpos = std::lower_bound(t->lc()->points.cbegin(),
+                    t->lc()->points.cend(), shape,
+                    [](const coord_type &a, const coord_type &b) {
+                    return a.second > b.second;
+                });
+                if (lpos == t->lc()->points.cend())
+                    --lpos;
+                auto rpos = std::lower_bound(t->rc()->points.cbegin(),
+                    t->rc()->points.cend(), shape,
+                    [](const coord_type &a, const coord_type &b) {
+                    return a.second > b.second;
+                });
+                if (rpos == t->rc()->points.cend())
+                    --rpos;
+                dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(), 
+                    xoff, yoff, dst);
+                dst = floorplan_impl(t->rc(), rpos - t->rc()->points.cbegin(), 
+                    xoff + lpos->first, yoff, dst);
+            }
+            return dst;
+        }
+    };
+
+}   // polish
 
 #endif /* polish_tree_hpp */
