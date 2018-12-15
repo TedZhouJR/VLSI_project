@@ -1,5 +1,4 @@
 //  polish_node.cpp
-//  sa
 
 #include <algorithm>
 #include <cassert>
@@ -9,6 +8,7 @@
 
 using namespace std;
 using namespace polish;
+using namespace polish::detail;
 
 std::ostream & polish::operator<<(std::ostream &os, const meta_polish_node &n) {
     switch (n.type) {

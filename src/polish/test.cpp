@@ -112,6 +112,11 @@ namespace {
 
     private:
         template<typename Tree>
+        static auto get(Tree &&t, std::size_t k) {
+            return std::next(t.begin(), k);
+        }
+
+        template<typename Tree>
         static std::ostream &print_tree(const Tree &t, 
             std::ostream &os = std::cout) {
             for (const auto &e : t)
@@ -122,9 +127,9 @@ namespace {
 
         template<typename Tree>
         static bool is_m3_valid(const Tree &t, uint32_t i) {
-            if (i + 1 >= t.size())
+            if (i + 1 >= std::distance(t.begin(), t.end()))
                 return false;
-            auto p = t.get(i), q = std::next(p);
+            auto p = get(t, i), q = std::next(p);
             MY_ASSERT(p == std::prev(q));
             if ((p->type == combine_type::LEAF) == (q->type == combine_type::LEAF))
                 return false;
@@ -189,7 +194,7 @@ namespace {
 
             {
                 auto tmp = t;
-                tmp.swap_nodes(tmp.get(4), tmp.get(6));
+                tmp.swap_nodes(get(tmp, 4), get(tmp, 6));
                 MY_ASSERT(test_traversal(tmp));
                 MY_ASSERT(tmp.check_integrity());
                 cout << "M1:" << endl;
@@ -198,7 +203,7 @@ namespace {
 
             {
                 auto tmp = t;
-                tmp.invert_chain(tmp.get(8));
+                tmp.invert_chain(get(tmp, 8));
                 MY_ASSERT(test_traversal(tmp));
                 MY_ASSERT(tmp.check_integrity());
                 cout << "M2:" << endl;
@@ -207,7 +212,7 @@ namespace {
 
             {
                 auto tmp = t;
-                auto i = tmp.get(2), j = std::next(i);
+                auto i = get(tmp, 2), j = std::next(i);
                 tmp.swap_nodes(i, j);
                 MY_ASSERT(test_traversal(tmp));
                 MY_ASSERT(tmp.check_integrity());
@@ -272,12 +277,12 @@ namespace {
             print_tree(t) << endl << line_ << endl;
 
             uniform_int_distribution<typename tree_type::size_type> 
-                rand(0, t.size() - 2);
+                rand(0, std::distance(t.begin(), t.end()) - 2);
 
             size_t threshold = 1 << 16;
             while (threshold-- && times) {
                 auto idx = rand(eng_);
-                auto i = t.get(idx), j = t.get(idx + 1);
+                auto i = get(t, idx), j = get(t, idx + 1);
                 MY_ASSERT(i == std::prev(j));
                 MY_ASSERT(j == std::next(i));
                 if (i->type == combine_type::LEAF 
@@ -295,7 +300,7 @@ namespace {
                         MY_ASSERT(test_traversal(t));
                         MY_ASSERT(t.check_integrity());
                         auto t2 = t;
-                        auto ret = t2.swap_nodes(t2.get(idx), t2.get(idx + 1));
+                        auto ret = t2.swap_nodes(get(t2, idx), get(t2, idx + 1));
                         MY_ASSERT(ret);
                         MY_ASSERT(test_traversal(t2));
                         MY_ASSERT(t2.check_integrity());
