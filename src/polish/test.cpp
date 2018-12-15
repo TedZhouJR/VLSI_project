@@ -18,12 +18,13 @@ void test() {
 
 int main(int argc, char **argv) {
     cout << "Start simulate anneal..." << endl;
-    SA sa(70.0, 0.01, 70, 4, 10);
+    SA sa(0.7, 30, 0.1, 40, 10);
     while(!sa.reach_end()) {
         while(!sa.reach_balance()) {
             sa.take_step();
         }
         sa.cool_down_by_speed();
+        // cout << "cool down" << endl;
     }
     sa.print();
     cout << "passed!" << endl;

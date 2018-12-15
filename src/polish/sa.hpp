@@ -336,10 +336,9 @@ namespace {
             int balance_minstep_in, float ending_temperature_in)
         : eng_(std::random_device{}()), line_(80, '-') {
             load_tree();
-            init_vbuf(vtree_);
+            update_vbuf();
             print_tree(vtree_);
             temperature = count_init_temprature(init_accept_rate);
-            acc_rate = init_accept_rate;
             cooldown_speed = cooldown_speed_in;
             accept_under_currentT = total_under_currentT = 0;
             balance_min_accrate = balance_min_accrate_in;
@@ -350,18 +349,18 @@ namespace {
         }
 
         void take_step() {
-            std::cout << "step" << endl;
             float pre_min_area, post_min_area;
-            pre_min_area = count_min_area(vbuf_);
+            pre_min_area = count_min_area();
             struct operation op = random_operation();
-            check_valid_and_go(op);
-            post_min_area = count_min_area(vbuf_);
-            if (pre_min_area < post_min_area) { //probably accept
+            struct operation op_final = check_valid_and_go(op);
+            post_min_area = count_min_area();
+            if (pre_min_area <= post_min_area) { //probably accept
+                float acc_rate = exp((pre_min_area - post_min_area) / temperature);
                 if (((float)rand() / (float)RAND_MAX) <= acc_rate) {
                     accept_under_currentT++;
                     total_under_currentT++;
                 } else {
-                    goto_neighbor(vbuf_, op);   //recover previous state
+                    goto_neighbor(op_final);   //recover previous state
                     total_under_currentT++;
                 }
             } else { //accept
@@ -377,11 +376,13 @@ namespace {
         }
 
         void cool_down_by_ratio() {
+            std::cout << "current area : " << count_min_area() << endl;
             temperature = temperature * (1 - cooldown_speed);
             accept_under_currentT = total_under_currentT = 0;
         }
 
         void cool_down_by_speed() {
+            std::cout << "current area : " <<  count_min_area() << endl;
             temperature = temperature - cooldown_speed;
             accept_under_currentT = total_under_currentT = 0;
         }
@@ -412,8 +413,8 @@ namespace {
             }
         }
 
-        void init_vbuf(const vctr_tree_type &t) {
-            vbuf_.assign(t.begin(), t.end());
+        void update_vbuf() {
+            vbuf_.assign(vtree_.begin(), vtree_.end());
         }
 
         void load_tree() {
@@ -422,26 +423,31 @@ namespace {
             m.ypos.push_back(0);
             m.xpos.push_back(30);
             m.ypos.push_back(20);
-            modules_.assign(6, m);
+            modules_.assign(12, m);
             expr_ = {
-                0, 1, expression::COMBINE_HORIZONTAL,
+                0, 1, expression::COMBINE_VERTICAL,
                 2, 3, expression::COMBINE_VERTICAL, 4, 5,
-                expression::COMBINE_VERTICAL, expression::COMBINE_HORIZONTAL,
-                expression::COMBINE_VERTICAL
+                expression::COMBINE_VERTICAL, expression::COMBINE_VERTICAL,
+                expression::COMBINE_VERTICAL,
+                6, 7, expression::COMBINE_VERTICAL,
+                8, 9, expression::COMBINE_VERTICAL, 10, 11,
+                expression::COMBINE_VERTICAL, expression::COMBINE_VERTICAL,
+                expression::COMBINE_VERTICAL, expression::COMBINE_VERTICAL
             };
             vtree_.construct(modules_, expr_);
         }
 
         float count_init_temprature(float init_accept_rate) {
             // TODO
-            std::cout << count_min_area(vbuf_) << endl;
-            return 100.0;
+            std::cout << count_min_area() << endl;
+            return 2500.0;
         }
 
-        float count_min_area(const std::vector<basic_vectorized_polish_node<>> &vbuf_in) {
+        float count_min_area() {
             // print_coord_list((std::prev(vbuf_in.end()))->points);
             float min_area = -1;
-            for (auto &&e : (std::prev(vbuf_in.end()))->points) {
+            update_vbuf();
+            for (auto &&e : (std::prev(vbuf_.end()))->points) {
                 if (e.first * e.second < min_area || min_area < 0) {
                     min_area = e.first * e.second;
                 }
@@ -449,50 +455,52 @@ namespace {
             return min_area;
         }
 
-        void goto_neighbor(const std::vector<basic_vectorized_polish_node<>> &vbuf_in, struct operation op) {
-            auto tmp = vtree_;
+        void goto_neighbor(struct operation op) {
             if (op.type == operation_type::M2) {
-                tmp.invert_chain(tmp.get(op.target1));
+                vtree_.invert_chain(vtree_.get(op.target1));
             } else {
-                auto i = tmp.get(op.target1), j = tmp.get(op.target2);
-                tmp.swap_nodes(i, j);
+                auto i = vtree_.get(op.target1), j = vtree_.get(op.target2);
+                vtree_.swap_nodes(i, j);
             }
         }
 
         //检查操作合法性，校正并执行操作
-        void check_valid_and_go(struct operation op) {
-            auto tmp = vtree_;
+        struct operation check_valid_and_go(struct operation op) {
             if (op.type == operation_type::M1) {
-                op.target2 = -1;
+                // std::cout<< "step M1 " << op.target1 << endl;
+                op.target1 = -1;
                 while (op.target2 < 0) {
-                    op.target1 = rand() % (vbuf_.size() - 1);
+                    op.target2 = rand() % (vbuf_.size() - 1);
                     //如果是非叶节点，非法
                     if (vbuf_[op.target1].type == combine_type::LEAF) {
                         //找左边的相邻叶节点，找不到则非法
-                        for (op.target2 = op.target1 - 1; op.target2 >= 0; op.target2--) {
-                            if (vbuf_[op.target2].type == combine_type::LEAF)
+                        for (op.target1 = op.target2 - 1; op.target1 >= 0; op.target1--) {
+                            if (vbuf_[op.target1].type == combine_type::LEAF)
                                 break;
                         }
                     }
                 }
-                tmp.swap_nodes(tmp.get(op.target1), tmp.get(op.target2));
+                vtree_.swap_nodes(vtree_.get(op.target1), vtree_.get(op.target2));
             } else if (op.type == operation_type::M2) {
+                // std::cout<< "step M2 " << op.target1 << endl;
                 //如果是叶节点，非法
                 while (vbuf_[op.target1].type == combine_type::LEAF) {
                     op.target1 = rand() % (vbuf_.size() - 1);
                 }
-                tmp.invert_chain(tmp.get(op.target1));
+                vtree_.invert_chain(vtree_.get(op.target1));
             } else {
+                // std::cout<< "step M3 " << op.target1 << endl;
                 bool valid = false;
                 while (!valid) {
-                    op.target1 = (rand() % (vbuf_.size() - 2)) + 1;
-                    op.target2 = op.target1 - 1;
+                    op.target2 = (rand() % (vbuf_.size() - 2)) + 1;
+                    op.target1 = op.target2 - 1;
                     if ((vbuf_[op.target1].type == combine_type::LEAF) xor
                         (vbuf_[op.target2].type == combine_type::LEAF)) {
-                        valid = tmp.swap_nodes(tmp.get(op.target1), tmp.get(op.target2));
+                        valid = vtree_.swap_nodes(vtree_.get(op.target1), vtree_.get(op.target2));
                     }
                 }
             }
+            return op;
         }
 
         struct operation random_operation() {
@@ -524,7 +532,7 @@ namespace {
         vctr_tree_type vtree_;
         default_random_engine eng_;
         std::string line_;
-        float temperature, cooldown_speed, acc_rate;
+        float temperature, cooldown_speed;
         int accept_under_currentT, total_under_currentT;
         float balance_min_accrate, ending_temperature;
         int balance_minstep;
