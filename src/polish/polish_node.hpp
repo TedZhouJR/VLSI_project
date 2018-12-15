@@ -24,7 +24,7 @@ namespace polish {
 
         combine_type type;	//*(左右结合) or +(上下结合)
 
-        explicit meta_polish_node(combine_type type_in) : 
+        explicit meta_polish_node(combine_type type_in) :
             type(type_in) {}
 
         static combine_type invert_combine_type(combine_type c) noexcept {
@@ -52,11 +52,11 @@ namespace polish {
         dimension_type height;
         dimension_type width;
 
-        basic_polish_node(combine_type type_in) : 
+        basic_polish_node(combine_type type_in) :
             basic_polish_node(type_in, 0, 0) {}
 
         basic_polish_node(combine_type type_in, dimension_type height_in,
-            dimension_type width_in) : base(type_in), height(height_in), 
+            dimension_type width_in) : base(type_in), height(height_in),
             width(width_in) {}
 
         static self make_header() {
@@ -102,8 +102,8 @@ namespace polish {
         using typename base::coord_type;
         using typename base::dimension_type;
 
-        basic_vectorized_polish_node(combine_type type, 
-            const allocator_type &alloc) : 
+        basic_vectorized_polish_node(combine_type type,
+            const allocator_type &alloc) :
             base(type), points(alloc) {}
 
         static self make_header() {
@@ -116,7 +116,7 @@ namespace polish {
             points.clear();
             if (this->type == combine_type::VERTICAL) {
                 auto i = lc.points.begin(), j = rc.points.begin();
-                constexpr dimension_type inf 
+                constexpr dimension_type inf
                     = std::numeric_limits<dimension_type>::max();
                 dimension_type yi = inf, yj = inf;
                 while (i != lc.points.end() && j != rc.points.end()) {
@@ -190,7 +190,7 @@ namespace polish {
         }
 
         bool check_curve() const {
-            return std::adjacent_find(points.begin(), points.end(), 
+            return std::adjacent_find(points.begin(), points.end(),
                 [](const coord_type &a, const coord_type &b) {
                 return a.first >= b.first || a.second <= b.second;
             }) == points.end();
@@ -256,7 +256,7 @@ namespace polish {
 
         // Forward all arguments to base types.
         template<typename... Types>
-        tree_node(Types &&...args) : tree_node_base(), 
+        tree_node(Types &&...args) : tree_node_base(),
             base(std::forward<Types>(args)...) {}
 
         static self make_header() {

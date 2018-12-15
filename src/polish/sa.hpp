@@ -316,4 +316,197 @@ namespace {
         std::string line_;
     };
 
+    enum class operation_type {
+        M1, M2, M3
+    };
+
+    struct operation {
+        operation_type type;
+        int target;
+    };
+
+    class SA {
+    public:
+        using combine_type = typename basic_polish_node::combine_type;
+        using tree_type = polish::polish_tree<>;
+        using vctr_tree_type = polish::vectorized_polish_tree<>;
+
+        SA(float init_accept_rate, float cooldown_speed_in, float balance_min_accrate_in,
+            int balance_minstep_in, float ending_temperature_in)
+        : eng_(std::random_device{}()), line_(80, '-') {
+            load_tree();
+            init_vbuf(vtree_);
+            print_tree(vtree_);
+            temperature = count_init_temprature(init_accept_rate);
+            acc_rate = init_accept_rate;
+            cooldown_speed = cooldown_speed_in;
+            accept_under_currentT = total_under_currentT = 0;
+            balance_min_accrate = balance_min_accrate_in;
+            balance_minstep = balance_minstep_in;
+            ending_temperature = ending_temperature_in;
+
+            srand((unsigned)time(NULL));
+        }
+
+        void take_step() {
+            float pre_min_area, post_min_area;
+            pre_min_area = count_min_area(vbuf_);
+            struct operation op = random_operation();
+            goto_neighbor(vbuf_, op);
+            post_min_area = count_min_area(vbuf_);
+            if (pre_min_area < post_min_area) { //probably accept
+                if (((float)rand() / (float)RAND_MAX) <= acc_rate) {
+                    accept_under_currentT++;
+                    total_under_currentT++;
+                } else {
+                    struct operation anti_op = anti_operation(op);
+                    goto_neighbor(vbuf_, anti_op);
+                    total_under_currentT++;
+                }
+            } else { //accept
+                accept_under_currentT++;
+                total_under_currentT++;
+            }
+        }
+
+        //only if accept rate > constant1 and total step > constant2
+        bool reach_balance() {
+            return ((float)accept_under_currentT / (float)total_under_currentT > balance_min_accrate
+                && total_under_currentT > balance_minstep);
+        }
+
+        void cool_down_by_ratio() {
+            temperature = temperature * (1 - cooldown_speed);
+            accept_under_currentT = total_under_currentT = 0;
+        }
+
+        void cool_down_by_speed() {
+            temperature = temperature - cooldown_speed;
+            accept_under_currentT = total_under_currentT = 0;
+        }
+
+        bool reach_end() {
+            return temperature <= ending_temperature;
+        }
+
+    private:
+        template<typename Tree>
+        static std::ostream &print_tree(const Tree &t,
+            std::ostream &os = std::cout) {
+            for (const auto &e : t)
+                os << e << " ";
+            os << endl;
+            return t.print_tree(os, 2);
+        }
+
+        void print_vbuf() {
+            int count = vbuf_.size();
+            for (int i = 0; i < count; i++)
+            {
+                std::cout << vbuf_[i] << endl;
+            }
+        }
+
+        void init_vbuf(const vctr_tree_type &t) {
+            vbuf_.assign(t.begin(), t.end());
+        }
+
+        void load_tree() {
+            yal::Module m;
+            m.xpos.push_back(0);
+            m.ypos.push_back(0);
+            m.xpos.push_back(30);
+            m.ypos.push_back(20);
+            modules_.assign(6, m);
+            expr_ = {
+                0, 1, expression::COMBINE_HORIZONTAL,
+                2, 3, expression::COMBINE_VERTICAL, 4, 5,
+                expression::COMBINE_VERTICAL, expression::COMBINE_HORIZONTAL,
+                expression::COMBINE_VERTICAL
+            };
+            vtree_.construct(modules_, expr_);
+        }
+
+        float count_init_temprature(float init_accept_rate) {
+            // TODO
+            std::cout << count_min_area(vbuf_) << endl;
+            return 100.0;
+        }
+
+        float count_min_area(const std::vector<basic_vectorized_polish_node<>> &vbuf_in) {
+            print_coord_list((std::prev(vbuf_in.end()))->points);
+            float min_area = -1;
+            for (auto &&e : (std::prev(vbuf_in.end()))->points) {
+                if (e.first * e.second < min_area || min_area < 0) {
+                    min_area = e.first * e.second;
+                }
+            }
+            return min_area;
+        }
+
+        void goto_neighbor(const std::vector<basic_vectorized_polish_node<>> &vbuf_in, struct operation op) {
+        }
+
+        bool check_operation_valid(struct operation op) {
+            if (op.type == operation_type::M1) {
+                //如果是非叶，则非法
+                //找左边的相邻叶节点，找不到则非法
+            } else if (op.type == operation_type::M2) {
+                //如果是叶节点，非法
+            } else {
+                //左边越界则非法
+                //如果是操作符，往左看
+                    //左边是操作符则非法
+                    //操作数是操作符孩子则非法
+                //如果是操作数，往左看找操作符
+                    //左边是操作数则非法
+            }
+            return true;
+        }
+
+        struct operation random_operation() {
+            struct operation op;
+            int tmp;
+            do {
+                tmp = rand() % 3;
+                if (tmp == 0) {
+                    op.type = operation_type::M1;
+                } else if (tmp == 1) {
+                    op.type = operation_type::M2;
+                } else {
+                    op.type = operation_type::M3;
+                }
+                tmp = rand() % (vbuf_.size() - 1);
+                op.target = tmp;
+            } while (!check_operation_valid(op));
+            return op;
+        }
+
+        struct operation anti_operation(struct operation op_in) {
+            struct operation op_out;
+            op_out.type = op_in.type;
+            op_out.target = op_in.target;
+            return op_out;
+        }
+
+        template<typename Cont>
+        static std::ostream &print_coord_list(Cont &&cont,
+            std::ostream &os = std::cout) {
+            for (auto &&e : cont)
+                cout << "(" << e.first << "," << e.second << ") ";
+            return os;
+        }
+
+        std::vector<yal::Module> modules_;
+        std::vector<expression::polish_expression_type> expr_;
+        std::vector<basic_vectorized_polish_node<>> vbuf_;
+        vctr_tree_type vtree_;
+        default_random_engine eng_;
+        std::string line_;
+        float temperature, cooldown_speed, acc_rate;
+        int accept_under_currentT, total_under_currentT;
+        float balance_min_accrate, ending_temperature;
+        int balance_minstep;
+    };
+
 }

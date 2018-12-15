@@ -2,7 +2,7 @@
 // Author: LYL
 #include "sa.hpp"
 
-int main(int argc, char **argv) {
+void test() {
     cout << "Start testing..." << endl;
     TestCase testcase;
     testcase.test_curve();
@@ -14,5 +14,13 @@ int main(int argc, char **argv) {
     testcase.test_vtree_m3_1();
     testcase.test_tree_rotate_leaf();
     cout << "All tests passed!" << endl;
+}
+
+int main(int argc, char **argv) {
+    cout << "Start simulate anneal..." << endl;
+    SA sa(70.0, 0.01, 70, 4, 10);
+    cout << "passed!" << endl;
+
+    // test();
     return 0;
 }
