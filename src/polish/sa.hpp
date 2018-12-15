@@ -322,7 +322,8 @@ namespace {
 
     struct operation {
         operation_type type;
-        int target;
+        int target1;
+        int target2;
     };
 
     class SA {
@@ -349,18 +350,18 @@ namespace {
         }
 
         void take_step() {
+            std::cout << "step" << endl;
             float pre_min_area, post_min_area;
             pre_min_area = count_min_area(vbuf_);
             struct operation op = random_operation();
-            goto_neighbor(vbuf_, op);
+            check_valid_and_go(op);
             post_min_area = count_min_area(vbuf_);
             if (pre_min_area < post_min_area) { //probably accept
                 if (((float)rand() / (float)RAND_MAX) <= acc_rate) {
                     accept_under_currentT++;
                     total_under_currentT++;
                 } else {
-                    struct operation anti_op = anti_operation(op);
-                    goto_neighbor(vbuf_, anti_op);
+                    goto_neighbor(vbuf_, op);   //recover previous state
                     total_under_currentT++;
                 }
             } else { //accept
@@ -387,6 +388,10 @@ namespace {
 
         bool reach_end() {
             return temperature <= ending_temperature;
+        }
+
+        void print() {
+            print_tree(vtree_);
         }
 
     private:
@@ -434,7 +439,7 @@ namespace {
         }
 
         float count_min_area(const std::vector<basic_vectorized_polish_node<>> &vbuf_in) {
-            print_coord_list((std::prev(vbuf_in.end()))->points);
+            // print_coord_list((std::prev(vbuf_in.end()))->points);
             float min_area = -1;
             for (auto &&e : (std::prev(vbuf_in.end()))->points) {
                 if (e.first * e.second < min_area || min_area < 0) {
@@ -445,48 +450,64 @@ namespace {
         }
 
         void goto_neighbor(const std::vector<basic_vectorized_polish_node<>> &vbuf_in, struct operation op) {
+            auto tmp = vtree_;
+            if (op.type == operation_type::M2) {
+                tmp.invert_chain(tmp.get(op.target1));
+            } else {
+                auto i = tmp.get(op.target1), j = tmp.get(op.target2);
+                tmp.swap_nodes(i, j);
+            }
         }
 
-        bool check_operation_valid(struct operation op) {
+        //检查操作合法性，校正并执行操作
+        void check_valid_and_go(struct operation op) {
+            auto tmp = vtree_;
             if (op.type == operation_type::M1) {
-                //如果是非叶，则非法
-                //找左边的相邻叶节点，找不到则非法
+                op.target2 = -1;
+                while (op.target2 < 0) {
+                    op.target1 = rand() % (vbuf_.size() - 1);
+                    //如果是非叶节点，非法
+                    if (vbuf_[op.target1].type == combine_type::LEAF) {
+                        //找左边的相邻叶节点，找不到则非法
+                        for (op.target2 = op.target1 - 1; op.target2 >= 0; op.target2--) {
+                            if (vbuf_[op.target2].type == combine_type::LEAF)
+                                break;
+                        }
+                    }
+                }
+                tmp.swap_nodes(tmp.get(op.target1), tmp.get(op.target2));
             } else if (op.type == operation_type::M2) {
                 //如果是叶节点，非法
+                while (vbuf_[op.target1].type == combine_type::LEAF) {
+                    op.target1 = rand() % (vbuf_.size() - 1);
+                }
+                tmp.invert_chain(tmp.get(op.target1));
             } else {
-                //左边越界则非法
-                //如果是操作符，往左看
-                    //左边是操作符则非法
-                    //操作数是操作符孩子则非法
-                //如果是操作数，往左看找操作符
-                    //左边是操作数则非法
+                bool valid = false;
+                while (!valid) {
+                    op.target1 = (rand() % (vbuf_.size() - 2)) + 1;
+                    op.target2 = op.target1 - 1;
+                    if ((vbuf_[op.target1].type == combine_type::LEAF) xor
+                        (vbuf_[op.target2].type == combine_type::LEAF)) {
+                        valid = tmp.swap_nodes(tmp.get(op.target1), tmp.get(op.target2));
+                    }
+                }
             }
-            return true;
         }
 
         struct operation random_operation() {
             struct operation op;
-            int tmp;
-            do {
-                tmp = rand() % 3;
-                if (tmp == 0) {
-                    op.type = operation_type::M1;
-                } else if (tmp == 1) {
-                    op.type = operation_type::M2;
-                } else {
-                    op.type = operation_type::M3;
-                }
-                tmp = rand() % (vbuf_.size() - 1);
-                op.target = tmp;
-            } while (!check_operation_valid(op));
+            int tmp = rand() % 3;
+            if (tmp == 0) {
+                op.type = operation_type::M1;
+            } else if (tmp == 1) {
+                op.type = operation_type::M2;
+            } else {
+                op.type = operation_type::M3;
+            }
+            tmp = rand() % (vbuf_.size() - 1);
+            op.target1 = tmp;
             return op;
-        }
-
-        struct operation anti_operation(struct operation op_in) {
-            struct operation op_out;
-            op_out.type = op_in.type;
-            op_out.target = op_in.target;
-            return op_out;
         }
 
         template<typename Cont>
