@@ -52,7 +52,7 @@ namespace polish {
         dimension_type height;
         dimension_type width;
 
-        basic_polish_node(combine_type type_in) noexcept :
+        explicit basic_polish_node(combine_type type_in) noexcept :
             basic_polish_node(type_in, 0, 0) {}
 
         basic_polish_node(combine_type type_in, dimension_type height_in,
@@ -243,7 +243,7 @@ namespace polish {
 
             // Forward all arguments to base types.
             template<typename... Types>
-            tree_node(Types &&...args) : tree_node_base(),
+            explicit tree_node(Types &&...args) : tree_node_base(),
                 base(std::forward<Types>(args)...) {}
 
             static self make_header() {
