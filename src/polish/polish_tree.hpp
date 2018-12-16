@@ -564,13 +564,6 @@ namespace polish {
                 && t->check_area();
         }
 
-        //// 使用allocator管理new / delete, 方便常数优化 (SA过程中需要复制到最优解)
-        //// NOTE: 1. 未作empty-base optimization; 2. 放在header()前面保险一点 (ctor)
-        //typename alloc_traits::template rebind_alloc<node_type> alloc_;
-
-        //// header()->left == root, 如此除header()外所有节点都有父节点, 也许能减少一些判断
-        //node_type *header();
-
         boost::compressed_pair<actual_allocator_type, node_type *> pair_;
     };
 
