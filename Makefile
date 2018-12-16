@@ -41,7 +41,7 @@ $(YAL_BIN_DIR)/module.o: $(YAL_SRC_DIR)/module.cpp
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $^ -o $@
 
 $(SEQPAIR_BIN_DIR)/%.o: $(SEQPAIR_SRC_DIR)/%.cpp
-	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $^ -I $(AURELIANO_SRC_DIR) -o $@
+	$(CC) -DNDEBUG -std=c++14 -O2 -c $^ -I $(AURELIANO_SRC_DIR) -o $@
 
 $(TARGET): $(BIN_DIR)/main.o $(filter-out $(POLISH_TEST_OBJ), $(POLISH_OBJ_LIST)) $(YAL_BIN_DIR)/module.o
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@
@@ -50,7 +50,7 @@ $(POLISH_TEST): $(POLISH_OBJ_LIST) $(YAL_BIN_DIR)/module.o
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -lboost_unit_test_framework -o $@
 
 $(SEQPAIR_TARGET): $(SEQPAIR_OBJ_LIST)
-	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@
+	$(CC) -DNDEBUG -std=c++14 -O2 $^ -o $@
 
 clean:
 	rm -f $(POLISH_BIN_DIR)/*.o

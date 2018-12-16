@@ -73,14 +73,13 @@ namespace seqpair {
 
             double initial_accepting_probability = 0.9;
             std::size_t simulaions_per_temperature = 1024;
-            double decreasing_ratio = 0.7;
+            double decreasing_ratio = 0.9;
             double restart_ratio = 2;
             double stopping_accepting_probability = 0.05;
         };
     };
 
     std::istream &operator>>(std::istream &in, typename SaPackerBase::options_t &opts) {
-        //in >> opts.initial_simulations;
         in >> opts.initial_accepting_probability;
         in >> opts.simulaions_per_temperature;
         in >> opts.decreasing_ratio;
@@ -91,11 +90,11 @@ namespace seqpair {
 
     std::ostream &operator<<(std::ostream &out, const typename SaPackerBase::options_t &opts) {
         using namespace std;
-        cout << "initial_accepting_probability: " << opts.initial_accepting_probability << "\n";
-        cout << "simulations_per_temperature: " << opts.simulaions_per_temperature << "\n";
-        cout << "decreasing_ratio: " << opts.decreasing_ratio << "\n";
-        cout << "restart_ratio: " << opts.restart_ratio << "\n";
-        cout << "stopping_accepting_probability: " << opts.stopping_accepting_probability << "\n";
+        cerr << "initial_accepting_probability: " << opts.initial_accepting_probability << "\n";
+        cerr << "simulations_per_temperature: " << opts.simulaions_per_temperature << "\n";
+        cerr << "decreasing_ratio: " << opts.decreasing_ratio << "\n";
+        cerr << "restart_ratio: " << opts.restart_ratio << "\n";
+        cerr << "stopping_accepting_probability: " << opts.stopping_accepting_probability << "\n";
         return out;
     }
 
@@ -121,27 +120,27 @@ namespace seqpair {
         explicit SaPacker(const options_t &opts = options_t(),
             const energy_function_t &func = energy_function_t(),
             const generator_allocator_type &alloc = generator_allocator_type()) : 
-            _opts(_checked_option(opts)), _energy_func(func), _eng(SEQPAIR_RANDOM_SEED()), 
-            _generator(alloc) { }
+            opts_(check_option(opts)), energy_func_(func), eng_(SEQPAIR_RANDOM_SEED()), 
+            generator_(alloc) { }
 
         const options_t &options() const {
-            return _opts;
+            return opts_;
         }
 
         void set_options(const options_t &opts) {
-            _opts = _checked_option(opts);
+            opts_ = check_option(opts);
         }
 
         const energy_function_t &energy_function() const {
-            return _energy_func;
+            return energy_func_;
         }
 
         void set_energy_function(const energy_function_t &func) {
-            _energy_func = func;
+            energy_func_ = func;
         }
 
         const generator_t &generator() const {
-            return _generator;
+            return generator_;
         }
 
         // Generates the solution and writes it to layout.
@@ -157,9 +156,9 @@ namespace seqpair {
             size_t num_simulations = 0;
 
             // Deferred generator construction from layout.
-            _generator.construct(layout.widths(), layout.heights(), _eng); 
-            auto best_gen = _generator;
-            auto res = _generator.make_resource();
+            generator_.construct(layout.widths(), layout.heights(), eng_); 
+            auto best_gen = generator_;
+            auto res = generator_.make_resource();
             
             // Initial loop for determining starting temperature.
             auto local_layout = layout;
@@ -169,37 +168,37 @@ namespace seqpair {
             double curr_energy, last_energy;
             double sum_energies = 0, sum_sqrs = 0;   // For stddev
             
-            if (verbose_level) cout << "\n";
+            if (verbose_level) cerr << "\n";
             constexpr size_t init_sims = 64;  
             for (size_t i = 0; i != init_sims; ++i) {
                 int w, h;
-                std::tie(w, h) = _generator(local_layout, _eng, res, chg_dist);
-                curr_energy = _energy_func(local_layout, first_line, last_line, w, h);
+                std::tie(w, h) = generator_(local_layout, eng_, res, chg_dist);
+                curr_energy = energy_func_(local_layout, first_line, last_line, w, h);
                 ++num_simulations;
                 if (curr_energy < min_energy) {
                     detail::unguarded_copy_layout(local_layout, best_layout);
-                    detail::unguarded_copy_generator(_generator, best_gen);
+                    detail::unguarded_copy_generator(generator_, best_gen);
                     min_energy = curr_energy;
                 }
                 sum_energies += curr_energy;
                 sum_sqrs += curr_energy * curr_energy;
                 max_energy = max(max_energy, curr_energy);
                 last_energy = curr_energy;
-                _generator.shuffle(_eng);
+                generator_.shuffle(eng_);
             }
             
             auto stddev = sqrt((sum_sqrs - sum_energies * sum_energies / init_sims) / 
                 (init_sims - 1));
             double temp = (stddev + numeric_limits<double>().epsilon()) / 
-                log(1.0 / _opts.initial_accepting_probability);
+                log(1.0 / opts_.initial_accepting_probability);
 
             if (verbose_level) {
-                cout << "Starting temperature: " << temp << "\n";
-                cout << "Starting min energy: " << min_energy << "\n";
-                cout << "Starting max energy: " << max_energy << "\n";
-                cout << "Stddev: " << stddev << "\n";
+                cerr << "Starting temperature: " << temp << "\n";
+                cerr << "Starting min energy: " << min_energy << "\n";
+                cerr << "Starting max energy: " << max_energy << "\n";
+                cerr << "Stddev: " << stddev << "\n";
                 if (verbose_level >= 2)
-                    cout << "\n";
+                    cerr << "\n";
             }
 
             // Main simulation process.
@@ -211,62 +210,62 @@ namespace seqpair {
                 size_t num_acceptions = 0;
                 double my_sum_energies = 0;
 
-                for (size_t i = 0; i != _opts.simulaions_per_temperature; ++i) {
+                for (size_t i = 0; i != opts_.simulaions_per_temperature; ++i) {
                     int w, h;
-                    std::tie(w, h) = _generator(local_layout, _eng, res, chg_dist);
+                    std::tie(w, h) = generator_(local_layout, eng_, res, chg_dist);
                     ++num_simulations;
-                    auto new_energy = _energy_func(local_layout, first_line, last_line, w, h);
+                    auto new_energy = energy_func_(local_layout, first_line, last_line, w, h);
                     my_sum_energies += new_energy;
 
                     if (new_energy < curr_energy ||
-                        rand_double(_eng) < exp((curr_energy - new_energy) / temp)) {
+                        rand_double(eng_) < exp((curr_energy - new_energy) / temp)) {
                         if (new_energy < min_energy) {
                             detail::unguarded_copy_layout(local_layout, best_layout);
-                            detail::unguarded_copy_generator(_generator, best_gen);
+                            detail::unguarded_copy_generator(generator_, best_gen);
                             min_energy = new_energy;
                         }
                         curr_energy = new_energy;
                         ++num_acceptions;
                     } else {
-                        _checked_undo(std::forward<ChgDist>(chg_dist));
+                        check_undo(std::forward<ChgDist>(chg_dist));
                     }
                 }
                 
                 if (verbose_level >= 2) {
-                    cout << "Temperature: " << temp << ", average energy: " <<
-                        my_sum_energies / _opts.simulaions_per_temperature <<
+                    cerr << "Temperature: " << temp << ", average energy: " <<
+                        my_sum_energies / opts_.simulaions_per_temperature <<
                         ", acception rate: " << static_cast<double>(num_acceptions) /
-                        _opts.simulaions_per_temperature << "\n";
+                        opts_.simulaions_per_temperature << "\n";
                 }
 
                 // Terminate criterion
                 if (static_cast<double>(num_acceptions) < 
-                    _opts.stopping_accepting_probability * _opts.simulaions_per_temperature ||
+                    opts_.stopping_accepting_probability * opts_.simulaions_per_temperature ||
                     temp < temp_guard)  // Usually this doens't happen, in certain cases this is necessary
                     break;
 
                 // Restart if necessary
                 // Note: based on average or current? (experiment shows that average-based 
                 // restart is better)
-                if (my_sum_energies / _opts.simulaions_per_temperature >
-                    _opts.restart_ratio * min_energy) {
+                if (my_sum_energies / opts_.simulaions_per_temperature >
+                    opts_.restart_ratio * min_energy) {
                     detail::unguarded_copy_layout(best_layout, local_layout);  // Not compulsory
-                    detail::unguarded_copy_generator(best_gen, _generator);
+                    detail::unguarded_copy_generator(best_gen, generator_);
                     curr_energy = min_energy;
                     ++num_restarts;
                 }
 
                 // Drop temperature
-                temp *= _opts.decreasing_ratio;
+                temp *= opts_.decreasing_ratio;
             }
 
             // Output results
             if (verbose_level) {
-                cout << "\n";
-                cout << "Finishing temperature: " << temp << "\n";
-                cout << "Finishing energy: " << curr_energy << "\n";
-                cout << "Total simulations: " << num_simulations << "\n";
-                cout << "Total restarts: " << num_restarts << "\n";
+                cerr << "\n";
+                cerr << "Finishing temperature: " << temp << "\n";
+                cerr << "Finishing energy: " << curr_energy << "\n";
+                cerr << "Total simulations: " << num_simulations << "\n";
+                cerr << "Total restarts: " << num_restarts << "\n";
             }
             layout = std::move(best_layout);
             return min_energy;
@@ -274,7 +273,7 @@ namespace seqpair {
 
     protected: 
         // Checks option.
-        bool _is_option_valid(const options_t &opts) const noexcept {
+        bool is_option_valid(const options_t &opts) const noexcept {
             return opts.initial_accepting_probability > 0 &&
                 opts.initial_accepting_probability < 1 &&
                 opts.simulaions_per_temperature &&
@@ -286,31 +285,31 @@ namespace seqpair {
         }
 
         // Throws on invalid option.
-        const options_t &_checked_option(const options_t &opts) const {
-            if (!_is_option_valid(opts))
+        const options_t &check_option(const options_t &opts) const {
+            if (!is_option_valid(opts))
                 throw std::invalid_argument("Invalid argument");
             return opts;
         }
 
         // Invokes generator_t::rollback and checks the return value.
         template<typename ChgDist>
-        bool _checked_undo(ChgDist &&chg_dist) {
-            return _checked_undo(_generator, chg_dist);
+        bool check_undo(ChgDist &&chg_dist) {
+            return check_undo(generator_, chg_dist);
         }
 
         // Invokes generator_t::rollback and checks the return value.
         template<typename ChgDist>
-        bool _checked_undo(generator_t &gen, ChgDist &&chg_dist) const {
+        bool check_undo(generator_t &gen, ChgDist &&chg_dist) const {
             auto b = gen.rollback();
             assert(detail::may_change_be_none(std::forward<ChgDist>(chg_dist)) || b);
             return b;
         }
 
-        // Note: actually _energy_func had better be stored in boost::compressed_pair
-        options_t _opts;
-        energy_function_t _energy_func; 
-        std::default_random_engine _eng;
-        generator_t _generator;
+        // Note: actually energy_func_ had better be stored in boost::compressed_pair
+        options_t opts_;
+        energy_function_t energy_func_; 
+        std::default_random_engine eng_;
+        generator_t generator_;
     };
 
     // Helper function for constructing SaPacker.

@@ -28,7 +28,7 @@ namespace seqpair {
             LayoutBase(sz, allocator_type()) { }
 
         LayoutBase(std::size_t sz, const allocator_type &alloc) : 
-            _x(sz, alloc), _y(sz, alloc) { }
+            x_(sz, alloc), y_(sz, alloc) { }
 
         template<typename Vctr0, typename Vctr1>
         std::pair<int, int> get_area(const Vctr0 &widths,
@@ -36,7 +36,7 @@ namespace seqpair {
             int lX = INT_MAX, rX = INT_MIN, bY = INT_MAX, tY = INT_MIN;
             int x, y, w, h;
             BOOST_FOREACH(boost::tie(x, y, w, h),
-                boost::combine(_x, _y, widths, heights)) {
+                boost::combine(x_, y_, widths, heights)) {
                 Rect r(x, y, w, h);
                 if (lX > r.left())
                     lX = r.left();
@@ -57,13 +57,13 @@ namespace seqpair {
             const Cont1 &heights, OutIt0 hcons, OutIt1 vcons) const {
             using namespace std;
             for (std::size_t i = 0; i != size(); ++i) {
-                Rect ri(_x[i], _y[i], widths[i], heights[i]);
+                Rect ri(x_[i], y_[i], widths[i], heights[i]);
                 int ix1 = ri.left();
                 int ix2 = ri.right();
                 int iy1 = ri.bottom();
                 int iy2 = ri.top();
                 for (std::size_t j = 0; j != size(); ++j) {
-                    Rect rj(_x[j], _y[j], widths[j], heights[j]);
+                    Rect rj(x_[j], y_[j], widths[j], heights[j]);
                     int jx1 = rj.left();
                     int jx2 = rj.right();
                     int jy1 = rj.bottom();
@@ -82,65 +82,65 @@ namespace seqpair {
         }
 
         auto size() const noexcept {
-            return _x.size();
+            return x_.size();
         }
 
         bool empty() const noexcept {
-            return _x.empty();
+            return x_.empty();
         }
 
         // Const view
         const pos_vector_t &x() const noexcept {
-            return _x;
+            return x_;
         }
 
         // Const view
         const pos_vector_t &y() const noexcept {
-            return _y;
+            return y_;
         }
 
         void set_x(std::size_t k, int x) {
-            _x[k] = x;
+            x_[k] = x;
         }
 
         void set_y(std::size_t k, int y) {
-            _y[k] = y;
+            y_[k] = y;
         }
 
         auto x_begin() {
-            return _x.begin();
+            return x_.begin();
         }
 
         auto x_begin() const {
-            return _x.begin();
+            return x_.begin();
         }
 
         auto x_end() {
-            return _x.end();
+            return x_.end();
         }
 
         auto x_end() const {
-            return _x.end();
+            return x_.end();
         }
 
         auto y_begin() {
-            return _y.begin();
+            return y_.begin();
         }
 
         auto y_begin() const {
-            return _y.begin();
+            return y_.begin();
         }
 
         auto y_end() {
-            return _y.end();
+            return y_.end();
         }
 
         auto y_end() const {
-            return _y.end();
+            return y_.end();
         }
 
     protected:
-        pos_vector_t _x, _y;
+        pos_vector_t x_, y_;
     };
 
 
@@ -172,7 +172,7 @@ namespace seqpair {
         explicit Layout(const allocator_type &alloc) : Layout(0, alloc) { }
 
         Layout(std::size_t sz, const allocator_type &alloc) : 
-            base_t(sz, alloc), _widths(alloc), _heights(alloc) { }
+            base_t(sz, alloc), widths_(alloc), heights_(alloc) { }
 
         // Each iterator should point to a pair-like structure of width and height
         // (must support std::get).
@@ -186,10 +186,10 @@ namespace seqpair {
 
         // Pushes fixed-size component.
         void push(int width, int height) {
-            _widths.push_back(width);
-            _heights.push_back(height);
-            base_t::_x.emplace_back();
-            base_t::_y.emplace_back();
+            widths_.push_back(width);
+            heights_.push_back(height);
+            base_t::x_.emplace_back();
+            base_t::y_.emplace_back();
         }
 
         // Pushes fixed-size component.
@@ -199,64 +199,64 @@ namespace seqpair {
         }
 
         void clear() {
-            _widths.clear();
-            _heights.clear();
-            base_t::_x.clear();
-            base_t::_y.clear();
+            widths_.clear();
+            heights_.clear();
+            base_t::x_.clear();
+            base_t::y_.clear();
         }
 
         const size_vector_t &widths() const noexcept {
-            return _widths;
+            return widths_;
         }
 
         const size_vector_t &heights() const noexcept {
-            return _heights;
+            return heights_;
         }
 
         auto widths_begin() {
-            return _widths.begin();
+            return widths_.begin();
         }
 
         auto widths_begin() const {
-            return _widths.begin();
+            return widths_.begin();
         }
 
         auto widths_end() {
-            return _widths.end();
+            return widths_.end();
         }
 
         auto widths_end() const {
-            return _widths.end();
+            return widths_.end();
         }
 
         auto heights_begin() {
-            return _heights.begin();
+            return heights_.begin();
         }
 
         auto heights_begin() const {
-            return _heights.begin();
+            return heights_.begin();
         }
 
         auto heights_end() {
-            return _heights.end();
+            return heights_.end();
         }
 
         auto heights_end() const {
-            return _heights.end();
+            return heights_.end();
         }
 
         // Read-only Rect view.
         Rect rect(std::size_t k) const {
-            return Rect(base_t::_x[k], base_t::_y[k], _widths[k], _heights[k]);
+            return Rect(base_t::x_[k], base_t::y_[k], widths_[k], heights_[k]);
         }
 
         std::pair<int, int> get_area() const noexcept {
-            return base_t::get_area(_widths, _heights);
+            return base_t::get_area(widths_, heights_);
         }
 
         template<typename OutIt0, typename OutIt1>
         std::pair<OutIt0, OutIt1> get_constraints(OutIt0 hcons, OutIt1 vcons) {
-            return base_t::get_constraints(_widths, _heights, hcons, vcons);
+            return base_t::get_constraints(widths_, heights_, hcons, vcons);
         }
 
         formatted format(format_policy policy = format_policy::delim) const {
@@ -283,10 +283,10 @@ namespace seqpair {
         std::istream &_read(std::istream &in) {
             Rect r;
             while (in >> r) {
-                base_t::_x.push_back(r.pos.x);
-                base_t::_y.push_back(r.pos.y);
-                _widths.push_back(r.width);
-                _heights.push_back(r.height);
+                base_t::x_.push_back(r.pos.x);
+                base_t::y_.push_back(r.pos.y);
+                widths_.push_back(r.width);
+                heights_.push_back(r.height);
             }
             return in;
         }
@@ -294,12 +294,12 @@ namespace seqpair {
         std::ostream &_print(std::ostream &out, format_policy policy) const {
             int x, y, w, h;
             BOOST_FOREACH(boost::tie(x, y, w, h),
-                boost::combine(base_t::_x, base_t::_y, _widths, _heights))
+                boost::combine(base_t::x_, base_t::y_, widths_, heights_))
                 out << Rect(x, y, w, h).format(policy) << "\n";
             return out;
         }
 
-        size_vector_t _widths, _heights;
+        size_vector_t widths_, heights_;
     };
 
 

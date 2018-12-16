@@ -17,7 +17,7 @@ namespace seqpair {
             intersects(r0.bottom(), r0.top(), r1.bottom(), r1.top());
     }
 
-#ifndef SEQPAIR_IO_BE_INLINE
+#ifndef SEQPAIR_IO_INLINE
     std::istream &operator>>(std::istream &in, Rect &r) {
         in >> r.pos.x >> r.pos.y;
         int right, top;

@@ -13,7 +13,7 @@
 #define SEQPAIR_DEBUG_RANDOM_SEED() (std::random_device{}())
 #endif
 
-#define SEQPAIR_IO_BE_INLINE  
+//#define SEQPAIR_IO_INLINE  
 
 namespace seqpair {
     namespace io {
