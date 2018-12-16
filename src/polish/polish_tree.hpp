@@ -1,9 +1,9 @@
-//  polish_tree.hpp
-//  sa
+//  slicing_tree.hpp
 
 #ifndef polish_tree_hpp
 #define polish_tree_hpp
 
+#include <boost/compressed_pair.hpp>
 #include <cassert>
 #include <cstddef>
 #include <vector>
@@ -17,23 +17,83 @@ namespace polish {
         // Polish expression is a sequence of integers, each representing
         // either an operator (COMBINE_HORIZONTAL or COMBINE_VERTICAL) 
         // or a non-negative module index.
-        using polish_expression_type 
-            = std::make_signed_t<typename polish_node::size_type>;
+        using polish_expression_type = std::ptrdiff_t;
         constexpr polish_expression_type COMBINE_HORIZONTAL = -1;
         constexpr polish_expression_type COMBINE_VERTICAL = -2;
     }
 
+    namespace detail {
+
+        template<typename Node>
+        struct node_traits;
+
+        template<>
+        struct node_traits<basic_polish_node> {
+            using value_type = basic_polish_node;
+            using node_type = polish_node;
+            using coord_type = typename node_type::coord_type;
+            using combine_type = typename node_type::combine_type;
+            using dimension_type = typename node_type::dimension_type;
+
+            template<typename Alloc>
+            static void placement_new_leaf(node_type *ptr,
+                const yal::Module &m, Alloc &&) {
+                ::new (ptr) node_type(meta_polish_node::combine_type::LEAF,
+                    m.yspan(), m.xspan());
+            }
+
+            template<typename Alloc>
+            static void placement_new_operator(node_type *ptr,
+                meta_polish_node::combine_type type, Alloc &&) {
+                ::new (ptr) node_type(type);
+            }
+        };
+
+        template<typename Al>
+        struct node_traits<basic_vectorized_polish_node<Al>> {
+            using value_type = basic_vectorized_polish_node<Al>;
+            using node_type = vectorized_polish_node<Al>;
+            using coord_type = typename node_type::coord_type;
+            using combine_type = typename node_type::combine_type;
+            using dimension_type = typename node_type::dimension_type;
+
+            template<typename Alloc>
+            static void placement_new_leaf(node_type *ptr,
+                const yal::Module &m, Alloc &&alloc) {
+                ::new (ptr) node_type(meta_polish_node::combine_type::LEAF,
+                    std::forward<Alloc>(alloc));
+                auto xspan = m.xspan(), yspan = m.yspan();
+                if (xspan > yspan)
+                    std::swap(xspan, yspan);
+                ptr->points.emplace_back(xspan, yspan);
+                if (xspan != yspan)
+                    ptr->points.emplace_back(yspan, xspan);
+            }
+
+            template<typename Alloc>
+            static void placement_new_operator(node_type *ptr,
+                meta_polish_node::combine_type type, Alloc &&alloc) {
+                ::new (ptr) node_type(type, std::forward<Alloc>(alloc));
+            }
+        };
+
+    }   // detail
+
     // Post-order bidirectional iterator.
-    class polish_tree_const_iterator :
+    template<typename Traits, typename AlTraits>
+    class slicing_tree_const_iterator :
         public std::iterator<std::bidirectional_iterator_tag,
-        const basic_polish_node, std::make_signed_t<typename polish_node::size_type>> {
+        typename Traits::value_type, typename AlTraits::difference_type, 
+        typename AlTraits::const_pointer, const typename Traits::value_type &> {
+
         using base = std::iterator<std::bidirectional_iterator_tag,
-            const basic_polish_node, std::make_signed_t<typename polish_node::size_type>>;
-        using self = polish_tree_const_iterator;
+            typename Traits::value_type, typename AlTraits::difference_type,
+            typename AlTraits::const_pointer, const typename Traits::value_type &>;
+        using self = slicing_tree_const_iterator;
 
     public:
-        template<typename Alloc>
-        friend class polish_tree;
+        template<typename Node, typename Alloc>
+        friend class slicing_tree;
 
         using typename base::difference_type;
         using typename base::iterator_category;
@@ -41,33 +101,33 @@ namespace polish {
         using typename base::reference;
         using typename base::value_type;
 
-        polish_tree_const_iterator() = default;
+        slicing_tree_const_iterator() = default;
 
-        reference operator*() const {
+        reference operator*() const noexcept {
             return *ptr_;
         }
 
-        pointer operator->() const {
+        pointer operator->() const noexcept {
             return ptr_;
         }
 
-        self &operator++() {
+        self &operator++() noexcept {
             ptr_ = ptr_->next();
             return *this;
         }
 
-        self operator++(int) {
+        self operator++(int) noexcept {
             self ret = *this;
             ++(*this);
             return ret;
         }
 
-        self &operator--() {
+        self &operator--() noexcept {
             ptr_ = ptr_->prev();
             return *this;
         }
 
-        self operator--(int) {
+        self operator--(int) noexcept {
             self ret = *this;
             --(*this);
             return ret;
@@ -82,55 +142,73 @@ namespace polish {
         }
 
     protected:
-        polish_tree_const_iterator(const polish_node *ptr) : ptr_(ptr) {}
+        using traits = Traits;
+        using node_type = typename Traits::node_type;
 
-        const polish_node *ptr_;
+        explicit slicing_tree_const_iterator(
+            const node_type *ptr) noexcept : ptr_(ptr) {}
+
+        const node_type *ptr_;
     };
 
-    // Slicing tree with post-order bidirectional iterator 
-    // and O(h) post-order random access.
+    // Slicing tree with post-order bidirectional iterator.
     // Alloc should be of type basic_polish_node.
-    template<typename Alloc = std::allocator<basic_polish_node>>
-    class polish_tree {
+    template<typename BasicNode, typename Alloc = std::allocator<BasicNode>>
+    class slicing_tree {
+        using self = slicing_tree;
+
+    protected:
+        using traits = detail::node_traits<BasicNode>;
+        using alloc_traits = std::allocator_traits<Alloc>;
+        using node_type = typename traits::node_type;
+        using actual_allocator_type = typename alloc_traits::template rebind_alloc<node_type>;
+
     public:
+        using combine_type = typename traits::combine_type;
+        using coord_type = typename traits::coord_type;
+        using dimension_type = typename traits::dimension_type;
+        using value_type = typename traits::value_type;
+        
         using allocator_type = Alloc;
-        using combine_type = typename polish_node::combine_type;
-        using dimension_type = typename polish_node::size_type;
-        using node_type = polish_node;
-        using value_type = basic_polish_node;
-        using size_type = typename polish_node::size_type;
-        using iterator = polish_tree_const_iterator;
-        using const_iterator = polish_tree_const_iterator;
+        using const_iterator = slicing_tree_const_iterator<traits, alloc_traits>;
+        using iterator = const_iterator;
+        
+        using const_reference = const value_type &;
+        using reference = value_type & ;
+        using size_type = typename alloc_traits::size_type;
+        using difference_type = typename alloc_traits::difference_type;
+        using const_pointer = typename alloc_traits::const_pointer;
+        using pointer = typename alloc_traits::pointer;
 
-        polish_tree() : polish_tree(allocator_type()) {}
+        slicing_tree() : slicing_tree(allocator_type()) {}
 
-        explicit polish_tree(const allocator_type &alloc) :
-            alloc_(alloc) {
-            header_ = copy_node(node_type::make_header());
+        explicit slicing_tree(const allocator_type &alloc) :
+            pair_(alloc, nullptr) {
+            header() = copy_node(node_type::make_header());
         }
 
-        polish_tree(const polish_tree &other) :
-            alloc_(std::allocator_traits<allocator_type>::
-                select_on_container_copy_construction(other.alloc_)) {
-            header_ = copy_tree(other.header_);
+        slicing_tree(const self &other) :
+            pair_(alloc_traits::
+                select_on_container_copy_construction(other.get_alloc()), 
+                nullptr) {
+            header() = copy_tree(other.header());
         }
 
-        ~polish_tree() {
-            clear_tree(header_);
+        ~slicing_tree() {
+            clear_tree(header());
         }
 
-        polish_tree &operator=(const polish_tree &other) {
-            if (std::allocator_traits<allocator_type>::
-                propagate_on_container_copy_assignment::value
-                && alloc_ != other.alloc_) {
-                clear_tree(header_);
-                alloc_ = other.alloc_;
-                header_ = copy_tree(other.header_);
+        self &operator=(const self &other) {
+            if (alloc_traits::propagate_on_container_copy_assignment::value
+                && get_alloc() != other.get_alloc()) {
+                clear_tree(header());
+                get_alloc() = other.get_alloc();
+                header() = copy_tree(other.header());
             } else {
                 // NOTE: self-assignment goes here
-                node_type *new_root = copy_tree(other.header_->lc());
+                node_type *new_root = copy_tree(other.header()->lc());
                 clear();
-                attach_left(header_, new_root);
+                attach_left(header(), new_root);
             }
             return *this;
         }
@@ -157,7 +235,7 @@ namespace polish {
                 if (e != expression::COMBINE_HORIZONTAL 
                     && e != expression::COMBINE_VERTICAL) {
                     const yal::Module &m = first_module[e];
-                    stack.push_back(new_node(combine_type::LEAF, m.yspan(), m.xspan()));
+                    stack.push_back(new_leaf(m));
                 } else {
                     if (stack.size() < 2) {
                         pass = false;
@@ -169,10 +247,9 @@ namespace polish {
                     stack.pop_back();
                     combine_type combine = e == expression::COMBINE_HORIZONTAL ?
                         combine_type::HORIZONTAL : combine_type::VERTICAL;
-                    node_type *t = new_node(combine, 0, 0);
+                    node_type *t = new_operator(combine);
                     attach_left(t, t1);
                     attach_right(t, t2);
-                    t->count_size();
                     t->count_area();
                     stack.push_back(t);
                 }
@@ -181,7 +258,7 @@ namespace polish {
             pass = pass && stack.size() == 1;
             if (pass) {
                 clear();
-                attach_left(header_, stack.back());
+                attach_left(header(), stack.back());
             } else {
                 for (node_type *p : stack)
                     clear_tree(p);
@@ -190,26 +267,17 @@ namespace polish {
         }
 
         void clear() {
-            clear_tree(header_->lc());
-            header_->lc() = nullptr;
+            clear_tree(header()->lc());
+            header()->lc() = nullptr;
         }
 
         bool empty() const noexcept {
-            return !header_->lc();
-        }
-
-        size_type size() const noexcept {
-            return empty() ? 0 : header_->lc()->size;
-        }
-
-        // Get kth iterator with post-order index.
-        const_iterator get(size_type k) const {
-            return k >= size() ? end() : const_iterator(get_impl(header_->lc(), k));
+            return !header()->lc();
         }
 
         // STL-like begin.
         const_iterator begin() const noexcept {
-            const node_type *t = header_;
+            const node_type *t = header();
             while (t->lc())
                 t = t->lc();
             return const_iterator(t);
@@ -217,7 +285,7 @@ namespace polish {
 
         // STL-like end.
         const_iterator end() const noexcept {
-            return const_iterator(header_);
+            return const_iterator(header());
         }
 
         // Conduct M1 / M3 change. 
@@ -230,8 +298,7 @@ namespace polish {
                 return false;
 
             bool ret = true;
-            node_type *t1 = const_cast<node_type *>(pos1.ptr_), 
-                *t2 = const_cast<node_type *>(pos2.ptr_);
+            node_type *t1 = get_iter_pointer(pos1), *t2 = get_iter_pointer(pos2);
             switch ((is_leaf(t1) << 1) | is_leaf(t2)) {
             case 0:
                 // Neither is leaf, error.
@@ -256,14 +323,14 @@ namespace polish {
         }
 
         // Conduct M2 change.
-        // @return false iff pos points to header_ or the node is not an operator 
+        // @return false iff pos points to header() or the node is not an operator 
         //         (i.e., is a leaf)
         bool invert_chain(const_iterator pos) {
-            node_type *t = const_cast<node_type *>(pos.ptr_);
-            if (t == header_ || is_leaf(t))
+            node_type *t = get_iter_pointer(pos);
+            if (t == header() || is_leaf(t))
                 return false;
-            while (t != header_) {
-                t->type = node_type::invert_combine_type(t->type);
+            while (t != header()) {
+                t->invert_combine_type();
                 t->count_area();
                 t = t->parent();
             }
@@ -274,20 +341,48 @@ namespace polish {
         std::ostream &print_tree(std::ostream &os, int ident = 4, 
             char fill = ' ') const {
             if (!empty())
-                header_->lc()->print_tree(os, 0, ident, fill);
+                header()->lc()->print_tree(os, 0, ident, fill);
             return os;
         }
 
         // For debug.
         bool check_integrity() const {
-            return empty() || check_integrity_impl(header_->lc());
+            return empty() || check_integrity_impl(header()->lc());
         }
 
-    private:
+    protected:
+        const node_type * header() const noexcept {
+            return pair_.second();
+        }
+
+        node_type *& header() noexcept {
+            return pair_.second();
+        }
+
+        const actual_allocator_type &get_alloc() const noexcept {
+            return pair_.first();
+        }
+
+        actual_allocator_type &get_alloc() noexcept {
+            return pair_.first();
+        }
+
         template<typename... Types>
         node_type *new_node(Types &&...args) {
-            node_type *t = alloc_.allocate(1);
+            node_type *t = get_alloc().allocate(1);
             ::new (t) node_type(std::forward<Types>(args)...);
+            return t;
+        }
+
+        node_type *new_leaf(const yal::Module &m) {
+            node_type *t = get_alloc().allocate(1);
+            traits::placement_new_leaf(t, m, get_alloc());
+            return t;
+        }
+
+        node_type *new_operator(combine_type type) {
+            node_type *t = get_alloc().allocate(1);
+            traits::placement_new_operator(t, type, get_alloc());
             return t;
         }
 
@@ -301,15 +396,15 @@ namespace polish {
 
         void delete_node(node_type *t) {
             t->~node_type();
-            alloc_.deallocate(t, 1);
+            get_alloc().deallocate(t, 1);
         }
 
-        static void attach_left(node_type *father, node_type *left) {
+        static void attach_left(node_type *father, node_type *left) noexcept {
             father->lc() = left;
             left->parent() = father;
         }
 
-        static void attach_right(node_type *father, node_type *right) {
+        static void attach_right(node_type *father, node_type *right) noexcept {
             father->rc() = right;
             right->parent() = father;
         }
@@ -337,26 +432,8 @@ namespace polish {
             return t->is_leaf();
         }
 
-        static void count_size(node_type *t, std::true_type) noexcept {
-            t->count_size();
-        }
-
-        static void count_size(node_type *t, std::false_type) noexcept {}
-
-        // Get node with post-order index.
-        const node_type *get_impl(const node_type *t, size_type offset) const {
-            assert(t && offset < t->size);
-            for (;;) {
-                size_type lc_sz = t->lc() ? t->lc()->size : 0;
-                if (offset < lc_sz) {
-                    t = t->lc();
-                } else if (offset < t->size - 1) {
-                    t = t->rc();
-                    offset -= lc_sz;
-                } else {
-                    return t;
-                }
-            }
+        static node_type *get_iter_pointer(const_iterator pos) noexcept {
+            return const_cast<node_type *>(pos.ptr_);
         }
 
         // Update down-top from non-leaf node t.
@@ -364,9 +441,8 @@ namespace polish {
         void update_downtop(node_type *t, 
             std::integral_constant<bool, B> update_size) {
             assert(!is_leaf(t));
-            while (t != header_) {
+            while (t != header()) {
                 t->count_area();
-                t->count_size();
                 t = t->parent();
             }
         }
@@ -377,11 +453,9 @@ namespace polish {
         void update_downtop(node_type *t1, node_type *t2,
             std::integral_constant<bool, B> update_size) {
             assert(!is_leaf(t1) && !is_leaf(t2));
-            while (t1 != header_ && t2 != header_) {
+            while (t1 != header() && t2 != header()) {
                 t1->count_area();
-                count_size(t1, update_size);
                 t2->count_area();
-                count_size(t2, update_size);
                 t1 = t1->parent();
                 t2 = t2->parent();
             }
@@ -484,21 +558,196 @@ namespace polish {
 
         bool check_integrity_impl(const node_type *t) const {
             if (t->is_leaf())
-                return t->check_area() && t->check_size();
+                return t->check_area();
             return check_integrity_impl(t->lc()) && check_integrity_impl(t->rc())
-                && t->check_area() && t->check_size()
-                && t->lc()->parent() == t && t->rc()->parent() == t;
+                && t->lc()->parent() == t && t->rc()->parent() == t 
+                && t->check_area();
         }
 
-        // 使用allocator管理new / delete, 方便常数优化 (SA过程中需要复制到最优解)
-        // NOTE: 1. 未作empty-base optimization; 2. 放在header_前面保险一点 (ctor)
-        typename std::allocator_traits<Alloc>::
-            template rebind_alloc<polish_node> alloc_;
+        //// 使用allocator管理new / delete, 方便常数优化 (SA过程中需要复制到最优解)
+        //// NOTE: 1. 未作empty-base optimization; 2. 放在header()前面保险一点 (ctor)
+        //typename alloc_traits::template rebind_alloc<node_type> alloc_;
 
-        // header_->left == root, 如此除header_外所有节点都有父节点, 也许能减少一些判断
-        node_type *header_;
+        //// header()->left == root, 如此除header()外所有节点都有父节点, 也许能减少一些判断
+        //node_type *header();
+
+        boost::compressed_pair<actual_allocator_type, node_type *> pair_;
     };
 
-}
+    // A polish_tree is a tree of basic_polish_node 
+    // (internally tree_node<basic_polish_node>).
+    template<typename Alloc = std::allocator<basic_polish_node>>
+    class polish_tree : public slicing_tree<basic_polish_node, Alloc> {
+        using self = polish_tree;
+        using base = slicing_tree<basic_polish_node, Alloc>;
+
+    protected:
+        using typename base::traits;
+        using typename base::alloc_traits;
+        using typename base::node_type;
+
+    public:
+        using typename base::combine_type;
+        using typename base::coord_type;
+        using typename base::dimension_type;
+        using typename base::value_type;
+        using typename base::allocator_type;
+        using typename base::iterator;
+        using typename base::const_iterator;
+        using typename base::const_reference;
+        using typename base::reference;
+        using typename base::size_type;
+        using typename base::difference_type;
+        using typename base::const_pointer;
+        using typename base::pointer;
+
+        using floorplan_entry = coord_type;
+
+        using slicing_tree<basic_polish_node, Alloc>::slicing_tree;
+
+        // Rotate leaf and update down-top.
+        bool rotate_leaf(const_iterator pos) noexcept {
+            node_type *t = this->get_iter_pointer(pos);
+            if (t == this->header() || !base::is_leaf(t))
+                return false;
+            t->invert_combine_type();
+            while (t != this->header()) {
+                t->count_area();
+                t = t->parent();
+            }
+            return true;
+        }
+
+        // Settle lower-left positions of all modules.
+        // Each output is a (x, y) pair (floorplan_entry).
+        template<typename OutIt>
+        OutIt floorplan(OutIt dst, dimension_type xoff = 0, 
+            dimension_type yoff = 0) const {
+            return this->empty() ? dst :
+                floorplan_impl(this->header()->lc(), xoff, yoff, dst);
+        }
+
+    protected:
+        template<typename OutIt>
+        static OutIt floorplan_impl(const node_type *t,
+            dimension_type xoff, dimension_type yoff, OutIt dst) {
+            assert(t);
+            if (t->type == combine_type::VERTICAL) {
+                dst = floorplan_impl(t->lc(), xoff, yoff, dst);
+                dst = floorplan_impl(t->rc(), xoff, yoff + t->lc()->height, dst);
+            } else if (t->type == combine_type::HORIZONTAL) {
+                dst = floorplan_impl(t->lc(), xoff, yoff, dst);
+                dst = floorplan_impl(t->rc(), xoff + t->lc()->width, yoff, dst);
+            } else {
+                *dst++ = std::make_pair(xoff, yoff);
+            }
+            return dst;
+        }
+    };
+
+    // A vectorized_polish_tree is a tree of 
+    // basic_vectorized_polish_node<some allocator>
+    // (internally tree_node<basic_vectorized_polish_node<some allocator>>).
+    template<typename Alloc = std::allocator<
+        basic_vectorized_polish_node<
+        std::allocator<meta_polish_node::coord_type>>>>
+    class vectorized_polish_tree : public slicing_tree<
+        typename std::allocator_traits<Alloc>::value_type, Alloc> {
+        using self = vectorized_polish_tree;
+        using base = slicing_tree<
+            typename std::allocator_traits<Alloc>::value_type, Alloc>;
+
+    protected:
+        using typename base::traits;
+        using typename base::alloc_traits;
+        using typename base::node_type;
+
+    public:
+        using typename base::combine_type;
+        using typename base::coord_type;
+        using typename base::dimension_type;
+        using typename base::value_type;
+        using typename base::allocator_type;
+        using typename base::iterator;
+        using typename base::const_iterator;
+        using typename base::const_reference;
+        using typename base::reference;
+        using typename base::size_type;
+        using typename base::difference_type;
+        using typename base::const_pointer;
+        using typename base::pointer;
+
+        using floorplan_entry = std::tuple<dimension_type, 
+            dimension_type, dimension_type, dimension_type>;
+
+        using slicing_tree<
+            typename std::allocator_traits<Alloc>::value_type, 
+            Alloc>::slicing_tree;
+
+        // Settle lower-left positions of all modules, 
+        // using the kth point of root's curve function.
+        // Each output is a (x, y, w, h) tuple (floorplan_entry).
+        template<typename OutIt>
+        OutIt floorplan(std::size_t k, OutIt dst,
+            dimension_type xoff = 0, dimension_type yoff = 0) const {
+            return this->empty() ? dst :
+                floorplan_impl(this->header()->lc(), k, xoff, yoff, dst);
+        }
+
+    protected:
+        template<typename OutIt>
+        static OutIt floorplan_impl(const node_type *t, std::size_t k,
+            dimension_type xoff, dimension_type yoff, OutIt dst) {
+            assert(t && k < t->points.size());
+            const auto &shape = t->points[k];
+            if (t->type == combine_type::LEAF) {
+                *dst++ = std::make_tuple(xoff, yoff, shape.first, shape.second);
+                return dst;
+            }
+
+            if (t->type == combine_type::VERTICAL) {
+                auto lpos = std::lower_bound(t->lc()->points.cbegin(),
+                    t->lc()->points.cend(), shape,
+                    [](const coord_type &a, const coord_type &b) {
+                    return a.first < b.first;
+                });
+                if (lpos == t->lc()->points.cend())
+                    --lpos;
+                auto rpos = std::lower_bound(t->rc()->points.cbegin(),
+                    t->rc()->points.cend(), shape,
+                    [](const coord_type &a, const coord_type &b) {
+                    return a.first < b.first;
+                });
+                if (rpos == t->rc()->points.cend())
+                    --rpos;
+                dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(), 
+                    xoff, yoff, dst);
+                dst = floorplan_impl(t->rc(), rpos - t->rc()->points.cbegin(),
+                    xoff, yoff + lpos->second, dst);
+            } else {
+                auto lpos = std::lower_bound(t->lc()->points.cbegin(),
+                    t->lc()->points.cend(), shape,
+                    [](const coord_type &a, const coord_type &b) {
+                    return a.second > b.second;
+                });
+                if (lpos == t->lc()->points.cend())
+                    --lpos;
+                auto rpos = std::lower_bound(t->rc()->points.cbegin(),
+                    t->rc()->points.cend(), shape,
+                    [](const coord_type &a, const coord_type &b) {
+                    return a.second > b.second;
+                });
+                if (rpos == t->rc()->points.cend())
+                    --rpos;
+                dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(), 
+                    xoff, yoff, dst);
+                dst = floorplan_impl(t->rc(), rpos - t->rc()->points.cbegin(), 
+                    xoff + lpos->first, yoff, dst);
+            }
+            return dst;
+        }
+    };
+
+}   // polish
 
 #endif /* polish_tree_hpp */

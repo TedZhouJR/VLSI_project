@@ -24,13 +24,17 @@ namespace polish {
 
         combine_type type;	//*(左右结合) or +(上下结合)
 
-        explicit meta_polish_node(combine_type type_in) : 
+        explicit meta_polish_node(combine_type type_in) noexcept : 
             type(type_in) {}
 
-        static combine_type invert_combine_type(combine_type c) {
+        static combine_type invert_combine_type(combine_type c) noexcept {
             return c == combine_type::LEAF ?
                 combine_type::LEAF : c == combine_type::HORIZONTAL ?
                 combine_type::VERTICAL : combine_type::HORIZONTAL;
+        }
+
+        void invert_combine_type() noexcept {
+            type = invert_combine_type(type);
         }
     };
 
@@ -48,11 +52,14 @@ namespace polish {
         dimension_type height;
         dimension_type width;
 
+        explicit basic_polish_node(combine_type type_in) noexcept :
+            basic_polish_node(type_in, 0, 0) {}
+
         basic_polish_node(combine_type type_in, dimension_type height_in,
-            dimension_type width_in) : base(type_in), height(height_in), 
+            dimension_type width_in) noexcept : base(type_in), height(height_in),
             width(width_in) {}
 
-        static self make_header() {
+        static self make_header() noexcept {
             return self(combine_type::LEAF, 0, 0);
         }
 
@@ -155,9 +162,19 @@ namespace polish {
             }
         }
 
-        bool check_area(const self &lc, const self &rc) {
+        bool check_area(const self &lc, const self &rc) const {
+            if (!check_curve())
+                return false;
             auto tmp = *this;
             tmp.count_area(lc, rc);
+            if (points != tmp.points)
+                return false;
+            self lst[2] = { lc, rc };
+            for (self &t : lst)
+                t.mirror_curve();
+            tmp.invert_combine_type();
+            tmp.count_area(lst[0], lst[1]);
+            tmp.mirror_curve();
             return points == tmp.points;
         }
 
@@ -165,10 +182,24 @@ namespace polish {
 
     private:
         basic_vectorized_polish_node() : base(combine_type::LEAF) {}
+
+        void mirror_curve() {
+            for (coord_type &e : points)
+                std::swap(e.first, e.second);
+            std::reverse(points.begin(), points.end());
+        }
+
+        bool check_curve() const noexcept {
+            return std::adjacent_find(points.begin(), points.end(), 
+                [](const coord_type &a, const coord_type &b) {
+                return a.first >= b.first || a.second <= b.second;
+            }) == points.end();
+        }
     };
 
     template<typename Alloc>
-    std::ostream & operator<<(std::ostream &os, const basic_vectorized_polish_node<Alloc> &n) {
+    std::ostream & operator<<(std::ostream &os, 
+        const basic_vectorized_polish_node<Alloc> &n) {
         if (n.type != meta_polish_node::combine_type::LEAF)
             return os << static_cast<const meta_polish_node &>(n);
         for (auto i = n.points.begin(); i != n.points.end(); ++i) {
@@ -179,131 +210,119 @@ namespace polish {
         return os;
     }
 
-    // Node base storing structural information.
-    class tree_node_base {
-        using self = tree_node_base;
+    namespace detail {
+    
+        // Node base storing structural information.
+        class tree_node_base {
+            using self = tree_node_base;
 
-    public:
-        using size_type = std::uint32_t;
+        public:
+            tree_node_base() noexcept : lc_(nullptr), rc_(nullptr), parent_(nullptr) {}
+            bool is_leaf() const noexcept { return !lc_; }
+            bool is_header() const noexcept { return !parent_; }
+            const self *prev() const noexcept;
+            const self *next() const noexcept;
 
-        tree_node_base() : lc_(nullptr), rc_(nullptr), parent_(nullptr), size(1) {}
-        bool is_leaf() const noexcept { return !lc_; }
-        bool is_header() const noexcept { return !parent_; }
-        const self *prev() const noexcept;
-        const self *next() const noexcept;
+            self *lc_;	        //left child
+            self *rc_;	        //right child
+            self *parent_;	    //parent node
+        };
+    
+        // Actual node stored in tree.
+        template<typename BaseNode>
+        class tree_node : public tree_node_base, public BaseNode {
+            // NOTE: tree_node_base goes first, because we need to mix
+            // tree_node_base * and tree_node *.
+            using self = tree_node;
+            using base = BaseNode;
 
-        void count_size() noexcept {
-            if (!is_leaf())
-                size = lc_->size + rc_->size + 1;
-        }
+        public:
+            using typename base::coord_type;
+            using typename base::dimension_type;
+            using base_type = base;
 
-        // For debug.
-        bool check_size() const noexcept {
-            if (is_leaf())
-                return size == 1;
-            else
-                return size == lc_->size + rc_->size + 1;
-        }
+            // Forward all arguments to base types.
+            template<typename... Types>
+            explicit tree_node(Types &&...args) : tree_node_base(),
+                base(std::forward<Types>(args)...) {}
 
-        self *lc_;	        //left child
-        self *rc_;	        //right child
-        self *parent_;	    //parent node
-        size_type size;     //subtree size
-    };
+            static self make_header() {
+                return self();
+            }
 
-    // Actual node stored in tree.
-    template<typename BaseNode>
-    class tree_node : public tree_node_base, public BaseNode {
-        // NOTE: tree_node_base goes first, because we need to mix
-        // tree_node_base * and tree_node *.
-        using self = tree_node;
-        using base = BaseNode;
+            const self *lc() const noexcept {
+                return static_cast<const self *>(this->lc_);
+            }
 
-    public:
-        using typename base::coord_type;
-        using typename base::dimension_type;
-        using typename tree_node_base::size_type;
+            self *&lc() noexcept {
+                return reinterpret_cast<self *&>(this->lc_);
+            }
 
-        // Forward all arguments to base types.
-        template<typename... Types>
-        tree_node(Types &&...args) : tree_node_base(), 
-            base(std::forward<Types>(args)...) {}
+            const self *rc() const noexcept {
+                return static_cast<const self *>(this->rc_);
+            }
 
-        static self make_header() {
-            return self();
-        }
+            self *&rc() noexcept {
+                return reinterpret_cast<self *&>(this->rc_);
+            }
 
-        const self *lc() const noexcept {
-            return static_cast<const self *>(this->lc_);
-        }
+            const self *parent() const noexcept {
+                return static_cast<const self *>(this->parent_);
+            }
 
-        self *&lc() noexcept {
-            return reinterpret_cast<self *&>(this->lc_);
-        }
+            self *&parent() noexcept {
+                return reinterpret_cast<self *&>(this->parent_);
+            }
 
-        const self *rc() const noexcept {
-            return static_cast<const self *>(this->rc_);
-        }
+            void count_area() {
+                if (!is_leaf())
+                    base::count_area(*lc(), *rc());
+            }
 
-        self *&rc() noexcept {
-            return reinterpret_cast<self *&>(this->rc_);
-        }
+            // For debug.
+            bool check_area() const {
+                return is_leaf() || base::check_area(*lc(), *rc());
+            }
 
-        const self *parent() const noexcept {
-            return static_cast<const self *>(this->parent_);
-        }
+            const self *prev() const noexcept {
+                return static_cast<const self *>(tree_node_base::prev());
+            }
 
-        self *&parent() noexcept {
-            return reinterpret_cast<self *&>(this->parent_);
-        }
+            self *prev() noexcept {
+                return const_cast<self *>(const_cast<const self *>(this)->prev());
+            }
 
-        void count_area() {
-            if (!is_leaf())
-                base::count_area(*lc(), *rc());
-        }
+            const self *next() const noexcept {
+                return static_cast<const self *>(tree_node_base::next());
+            }
 
-        // For debug.
-        bool check_area() const {
-            return is_leaf() || base::check_area(*lc(), *rc());
-        }
+            self *next() noexcept {
+                return const_cast<self *>(const_cast<const self *>(this)->next());
+            }
 
-        const self *prev() const noexcept {
-            return static_cast<const self *>(tree_node_base::prev());
-        }
+            // For debug.
+            std::ostream &print_tree(std::ostream &os, int offset,
+                int ident, char fill = ' ') const {
+                if (rc())
+                    rc()->print_tree(os, offset + ident, ident, fill);
+                for (int i = 0; i < offset; ++i)
+                    os << fill;
+                os << static_cast<const base &>(*this) << "\n";
+                if (lc())
+                    lc()->print_tree(os, offset + ident, ident, fill);
+                return os;
+            }
 
-        self *prev() noexcept {
-            return const_cast<self *>(const_cast<const self *>(this)->prev());
-        }
+        private:
+            tree_node() : tree_node_base(), base(base::make_header()) {}
+        };
 
-        const self *next() const noexcept {
-            return static_cast<const self *>(tree_node_base::next());
-        }
+        using polish_node = tree_node<basic_polish_node>;
 
-        self *next() noexcept {
-            return const_cast<self *>(const_cast<const self *>(this)->next());
-        }
+        template<typename Alloc>
+        using vectorized_polish_node = tree_node<basic_vectorized_polish_node<Alloc>>;
 
-        // For debug.
-        std::ostream &print_tree(std::ostream &os, int offset,
-            int ident, char fill = ' ') const {
-            if (rc())
-                rc()->print_tree(os, offset + ident, ident, fill);
-            for (int i = 0; i < offset; ++i)
-                os << fill;
-            os << static_cast<const base &>(*this) << "\n";
-            if (lc())
-                lc()->print_tree(os, offset + ident, ident, fill);
-            return os;
-        }
-
-    private:
-        tree_node() : tree_node_base(), base(base::make_header()) {}
-    };
-
-    using polish_node = tree_node<basic_polish_node>;
-
-    template<typename Alloc>
-    using vectorized_polish_node = tree_node<basic_vectorized_polish_node<Alloc>>;
+    }   // detail
 
 }   // polish
 

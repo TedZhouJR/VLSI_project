@@ -36,7 +36,7 @@ $(TARGET): $(BIN_DIR)/main.o $(filter-out $(POLISH_TEST_OBJ), $(POLISH_OBJ_LIST)
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@
 
 $(POLISH_TEST): $(POLISH_OBJ_LIST) $(YAL_BIN_DIR)/module.o
-	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -lboost_unit_test_framework -o $@
 
 clean:
 	rm -f $(POLISH_BIN_DIR)/*.o
