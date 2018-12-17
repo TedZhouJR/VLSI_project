@@ -44,7 +44,7 @@ TARGET_LIST = $(TARGET) $(POLISH_TEST) $(YAL_TARGET) $(SEQPAIR_TARGET)
 all: $(TARGET_LIST)
 
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp
-	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(POLISH_SRC_DIR) -I $(YAL_SRC_DIR) $^ -o $@ 
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(AURELIANO_SRC_DIR) -I $(POLISH_SRC_DIR) -I $(YAL_SRC_DIR) $^ -o $@ 
 
 $(POLISH_BIN_DIR)/%.o: $(POLISH_SRC_DIR)/%.cpp
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(YAL_SRC_DIR) -I $(AURELIANO_SRC_DIR) $^ -o $@ 
@@ -71,7 +71,7 @@ $(YAL_TARGET): $(YAL_SRC_DIR)/scanner.cpp $(YAL_SRC_DIR)/parser.cpp $(YAL_OBJ_LI
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $(YAL_OBJ_LIST) -o $@
 
 $(SEQPAIR_TARGET): $(SEQPAIR_OBJ_LIST) $(filter-out $(YAL_MAIN_OBJ), $(YAL_OBJ_LIST))
-	$(CC) -DNDEBUG -std=c++14 -O2 $^ -lboost_program_options -o $@
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -lboost_program_options -o $@
 
 clean:
 	rm -f $(POLISH_BIN_DIR)/*.o

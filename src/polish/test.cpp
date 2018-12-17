@@ -71,9 +71,6 @@ namespace {
         });
     }
 
-<<<<<<< HEAD
-    bool intersects(dimension_type lo0, dimension_type hi0,
-=======
     template<typename Tree>
     bool test_normalized(const Tree &t) {
         return std::adjacent_find(t.begin(), t.end(),
@@ -84,7 +81,6 @@ namespace {
     }
 
     bool intersects(dimension_type lo0, dimension_type hi0,
->>>>>>> 998113dab1d20be9165edba32af11413f0903f92
         dimension_type lo1, dimension_type hi1) {
         return (lo0 < hi1) ^ (lo1 >= hi0);
     }
