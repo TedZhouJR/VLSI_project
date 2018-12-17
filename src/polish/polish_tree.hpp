@@ -319,36 +319,6 @@ namespace polish {
             attach_left(header(), new_root);
         }
 
-        template<typename Eng>
-        static node_type *make_random_tree(std::vector<node_type *> &trees, 
-            std::vector<node_type *> &oprs, Eng &&eng) {
-            using namespace std;
-            assert(oprs.size() + 1 == trees.size());
-            random_shuffle(trees.begin(), trees.end());
-            bernoulli_distribution rand_bool;
-            while (trees.size() > 1) {
-                uniform_int_distribution<size_t> rand(0, trees.size() - 2);
-                size_t idx = rand(std::forward<Eng>(eng));
-                swap(trees[idx], trees[trees.size() - 2]);
-                swap(trees[idx + 1], trees.back());
-                node_type *opr = oprs.back();
-                oprs.pop_back();
-                attach_left(opr, trees[trees.size() - 2]);
-                attach_right(opr, trees.back());
-                if (opr->rc()->type != meta_polish_node::combine_type::LEAF) {
-                    opr->type = meta_polish_node::invert_combine_type(opr->rc()->type);
-                } else {
-                    opr->type = rand_bool(std::forward<Eng>(eng)) ? 
-                        meta_polish_node::combine_type::HORIZONTAL : 
-                        meta_polish_node::combine_type::VERTICAL;
-                }
-                opr->count_area();
-                trees.pop_back();
-                trees.back() = opr;
-            }
-            return trees.front();
-        }
-
         void clear() {
             clear_tree(header()->lc());
             header()->lc() = nullptr;
@@ -650,6 +620,36 @@ namespace polish {
             return check_integrity_impl(t->lc()) && check_integrity_impl(t->rc())
                 && t->lc()->parent() == t && t->rc()->parent() == t 
                 && t->check_area();
+        }
+
+        template<typename Eng>
+        static node_type *make_random_tree(std::vector<node_type *> &trees,
+            std::vector<node_type *> &oprs, Eng &&eng) {
+            using namespace std;
+            assert(oprs.size() + 1 == trees.size());
+            random_shuffle(trees.begin(), trees.end());
+            bernoulli_distribution rand_bool;
+            while (trees.size() > 1) {
+                uniform_int_distribution<size_t> rand(0, trees.size() - 2);
+                size_t idx = rand(std::forward<Eng>(eng));
+                swap(trees[idx], trees[trees.size() - 2]);
+                swap(trees[idx + 1], trees.back());
+                node_type *opr = oprs.back();
+                oprs.pop_back();
+                attach_left(opr, trees[trees.size() - 2]);
+                attach_right(opr, trees.back());
+                if (opr->rc()->type != meta_polish_node::combine_type::LEAF) {
+                    opr->type = meta_polish_node::invert_combine_type(opr->rc()->type);
+                } else {
+                    opr->type = rand_bool(std::forward<Eng>(eng)) ?
+                        meta_polish_node::combine_type::HORIZONTAL :
+                        meta_polish_node::combine_type::VERTICAL;
+                }
+                opr->count_area();
+                trees.pop_back();
+                trees.back() = opr;
+            }
+            return trees.front();
         }
 
         boost::compressed_pair<actual_allocator_type, node_type *> pair_;
