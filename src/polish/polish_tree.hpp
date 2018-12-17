@@ -15,7 +15,7 @@ namespace polish {
 
     namespace expression {
         // Polish expression is a sequence of integers, each representing
-        // either an operator (COMBINE_HORIZONTAL or COMBINE_VERTICAL) 
+        // either an operator (COMBINE_HORIZONTAL or COMBINE_VERTICAL)
         // or a non-negative module index.
         using polish_expression_type = std::ptrdiff_t;
         constexpr polish_expression_type COMBINE_HORIZONTAL = -1;
@@ -83,7 +83,7 @@ namespace polish {
     template<typename Traits, typename AlTraits>
     class slicing_tree_const_iterator :
         public std::iterator<std::bidirectional_iterator_tag,
-        typename Traits::value_type, typename AlTraits::difference_type, 
+        typename Traits::value_type, typename AlTraits::difference_type,
         typename AlTraits::const_pointer, const typename Traits::value_type &> {
 
         using base = std::iterator<std::bidirectional_iterator_tag,
@@ -168,11 +168,11 @@ namespace polish {
         using coord_type = typename traits::coord_type;
         using dimension_type = typename traits::dimension_type;
         using value_type = typename traits::value_type;
-        
+
         using allocator_type = Alloc;
         using const_iterator = slicing_tree_const_iterator<traits, alloc_traits>;
         using iterator = const_iterator;
-        
+
         using const_reference = const value_type &;
         using reference = value_type & ;
         using size_type = typename alloc_traits::size_type;
@@ -189,7 +189,7 @@ namespace polish {
 
         slicing_tree(const self &other) :
             pair_(alloc_traits::
-                select_on_container_copy_construction(other.get_alloc()), 
+                select_on_container_copy_construction(other.get_alloc()),
                 nullptr) {
             header() = copy_tree(other.header());
         }
@@ -232,7 +232,7 @@ namespace polish {
 
             for (; first_expr != last_expr; ++first_expr) {
                 expression::polish_expression_type e = *first_expr;
-                if (e != expression::COMBINE_HORIZONTAL 
+                if (e != expression::COMBINE_HORIZONTAL
                     && e != expression::COMBINE_VERTICAL) {
                     const yal::Module &m = first_module[e];
                     stack.push_back(new_leaf(m));
@@ -254,7 +254,7 @@ namespace polish {
                     stack.push_back(t);
                 }
             }
-            
+
             pass = pass && stack.size() == 1;
             if (pass) {
                 clear();
@@ -288,8 +288,8 @@ namespace polish {
             return const_iterator(header());
         }
 
-        // Conduct M1 / M3 change. 
-        // NOTE: if we want to do leaf-operator swap, 
+        // Conduct M1 / M3 change.
+        // NOTE: if we want to do leaf-operator swap,
         // then pos1 == std::prev(pos2) (in O(1)).
         // @require pos1 <= pos2; if M3, pos1 == std::prev(pos2)
         // @return true iff operation valid
@@ -323,7 +323,7 @@ namespace polish {
         }
 
         // Conduct M2 change.
-        // @return false iff pos points to header() or the node is not an operator 
+        // @return false iff pos points to header() or the node is not an operator
         //         (i.e., is a leaf)
         bool invert_chain(const_iterator pos) {
             node_type *t = get_iter_pointer(pos);
@@ -338,7 +338,7 @@ namespace polish {
         }
 
         // For debug.
-        std::ostream &print_tree(std::ostream &os, int ident = 4, 
+        std::ostream &print_tree(std::ostream &os, int ident = 4,
             char fill = ' ') const {
             if (!empty())
                 header()->lc()->print_tree(os, 0, ident, fill);
@@ -438,7 +438,7 @@ namespace polish {
 
         // Update down-top from non-leaf node t.
         template<bool B>
-        void update_downtop(node_type *t, 
+        void update_downtop(node_type *t,
             std::integral_constant<bool, B> update_size) {
             assert(!is_leaf(t));
             while (t != header()) {
@@ -476,7 +476,7 @@ namespace polish {
         // case a:
         //           |
         //           p1
-        //         /    \  
+        //         /    \
         //      t1        *
         //     /  \      / \
         //   ...  ...  ...  ...
@@ -487,10 +487,10 @@ namespace polish {
         // case b:
         //           |
         //           p1
-        //         /    \  
+        //         /    \
         //      t1        t2
-        //     /  \     
-        //   ...  ...  
+        //     /  \
+        //   ...  ...
         // @param t1 operator
         // @param t2 leaf
         // @return true (always)
@@ -502,7 +502,7 @@ namespace polish {
             attach_left(p1, t1->lc());
             t1->lc() = t1->rc();
             attach_right(t1, t2);
-            if (p1 != p2)  
+            if (p1 != p2)
                 attach_left(p2, t1);    // case a
             else
                 attach_right(p2, t1);   // case b
@@ -512,9 +512,9 @@ namespace polish {
 
         // Conduct M3 change, given post-order index(t2) - index(t1) == 1.
         // case a:
-        //            |  
+        //            |
         //           ca
-        //         /     \  
+        //         /     \
         //      pre       *
         //     /  \      /  \
         //   ...  ...  ...  ...
@@ -523,9 +523,9 @@ namespace polish {
         //           /  \
         //         ...   t1
         // case b:
-        //            |  
+        //            |
         //           ca
-        //         /     \  
+        //         /     \
         //      pre       t2
         //     /  \      /  \
         //   ...  ...  ...   t1
@@ -560,14 +560,14 @@ namespace polish {
             if (t->is_leaf())
                 return t->check_area();
             return check_integrity_impl(t->lc()) && check_integrity_impl(t->rc())
-                && t->lc()->parent() == t && t->rc()->parent() == t 
+                && t->lc()->parent() == t && t->rc()->parent() == t
                 && t->check_area();
         }
 
         boost::compressed_pair<actual_allocator_type, node_type *> pair_;
     };
 
-    // A polish_tree is a tree of basic_polish_node 
+    // A polish_tree is a tree of basic_polish_node
     // (internally tree_node<basic_polish_node>).
     template<typename Alloc = std::allocator<basic_polish_node>>
     class polish_tree : public slicing_tree<basic_polish_node, Alloc> {
@@ -614,7 +614,7 @@ namespace polish {
         // Settle lower-left positions of all modules.
         // Each output is a (x, y) pair (floorplan_entry).
         template<typename OutIt>
-        OutIt floorplan(OutIt dst, dimension_type xoff = 0, 
+        OutIt floorplan(OutIt dst, dimension_type xoff = 0,
             dimension_type yoff = 0) const {
             return this->empty() ? dst :
                 floorplan_impl(this->header()->lc(), xoff, yoff, dst);
@@ -638,7 +638,7 @@ namespace polish {
         }
     };
 
-    // A vectorized_polish_tree is a tree of 
+    // A vectorized_polish_tree is a tree of
     // basic_vectorized_polish_node<some allocator>
     // (internally tree_node<basic_vectorized_polish_node<some allocator>>).
     template<typename Alloc = std::allocator<
@@ -670,14 +670,14 @@ namespace polish {
         using typename base::const_pointer;
         using typename base::pointer;
 
-        using floorplan_entry = std::tuple<dimension_type, 
+        using floorplan_entry = std::tuple<dimension_type,
             dimension_type, dimension_type, dimension_type>;
 
         using slicing_tree<
-            typename std::allocator_traits<Alloc>::value_type, 
+            typename std::allocator_traits<Alloc>::value_type,
             Alloc>::slicing_tree;
 
-        // Settle lower-left positions of all modules, 
+        // Settle lower-left positions of all modules,
         // using the kth point of root's curve function.
         // Each output is a (x, y, w, h) tuple (floorplan_entry).
         template<typename OutIt>
@@ -713,7 +713,7 @@ namespace polish {
                 });
                 if (rpos == t->rc()->points.cend())
                     --rpos;
-                dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(), 
+                dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(),
                     xoff, yoff, dst);
                 dst = floorplan_impl(t->rc(), rpos - t->rc()->points.cbegin(),
                     xoff, yoff + lpos->second, dst);
@@ -732,9 +732,9 @@ namespace polish {
                 });
                 if (rpos == t->rc()->points.cend())
                     --rpos;
-                dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(), 
+                dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(),
                     xoff, yoff, dst);
-                dst = floorplan_impl(t->rc(), rpos - t->rc()->points.cbegin(), 
+                dst = floorplan_impl(t->rc(), rpos - t->rc()->points.cbegin(),
                     xoff + lpos->first, yoff, dst);
             }
             return dst;

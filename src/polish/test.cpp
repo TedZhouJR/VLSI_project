@@ -1,5 +1,6 @@
 // test.cpp: testcases for slicing tree.
 // Author: LYL
+#include "sa.hpp"
 
 #define BOOST_TEST_MODULE polish_test
 #define BOOST_TEST_DYN_LINK
@@ -70,12 +71,12 @@ namespace {
         });
     }
 
-    bool intersects(dimension_type lo0, dimension_type hi0, 
+    bool intersects(dimension_type lo0, dimension_type hi0,
         dimension_type lo1, dimension_type hi1) {
         return (lo0 < hi1) ^ (lo1 >= hi0);
     }
 
-    bool intersects(const typename vtree_type::floorplan_entry &a, 
+    bool intersects(const typename vtree_type::floorplan_entry &a,
         const typename vtree_type::floorplan_entry &b) {
         return intersects(get<0>(a), get<0>(a) + get<2>(a),
             get<0>(b), get<0>(b) + get<2>(b))
@@ -165,7 +166,7 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(m3_test, Tree, m3_test_types) {
             auto i = get_iter(t, idx), j = get_iter(t, idx + 1);
             BOOST_TEST((i == std::prev(j)));
             BOOST_TEST((j == std::next(i)));
-            if (i->type == combine_type::LEAF 
+            if (i->type == combine_type::LEAF
                 ^ j->type == combine_type::LEAF) {
                 bool valid = is_m3_valid(t, idx);
                 if (!t.swap_nodes(i, j)) {

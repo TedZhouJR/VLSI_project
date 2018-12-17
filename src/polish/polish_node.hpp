@@ -24,7 +24,7 @@ namespace polish {
 
         combine_type type;	//*(左右结合) or +(上下结合)
 
-        explicit meta_polish_node(combine_type type_in) noexcept : 
+        explicit meta_polish_node(combine_type type_in) noexcept :
             type(type_in) {}
 
         static combine_type invert_combine_type(combine_type c) noexcept {
@@ -102,8 +102,8 @@ namespace polish {
         using typename base::coord_type;
         using typename base::dimension_type;
 
-        basic_vectorized_polish_node(combine_type type, 
-            const allocator_type &alloc) : 
+        basic_vectorized_polish_node(combine_type type,
+            const allocator_type &alloc) :
             base(type), points(alloc) {}
 
         static self make_header() {
@@ -116,7 +116,7 @@ namespace polish {
             points.clear();
             if (this->type == combine_type::VERTICAL) {
                 auto i = lc.points.begin(), j = rc.points.begin();
-                constexpr dimension_type inf 
+                constexpr dimension_type inf
                     = std::numeric_limits<dimension_type>::max();
                 dimension_type yi = inf, yj = inf;
                 while (i != lc.points.end() && j != rc.points.end()) {
@@ -190,7 +190,7 @@ namespace polish {
         }
 
         bool check_curve() const noexcept {
-            return std::adjacent_find(points.begin(), points.end(), 
+            return std::adjacent_find(points.begin(), points.end(),
                 [](const coord_type &a, const coord_type &b) {
                 return a.first >= b.first || a.second <= b.second;
             }) == points.end();
@@ -198,7 +198,7 @@ namespace polish {
     };
 
     template<typename Alloc>
-    std::ostream & operator<<(std::ostream &os, 
+    std::ostream & operator<<(std::ostream &os,
         const basic_vectorized_polish_node<Alloc> &n) {
         if (n.type != meta_polish_node::combine_type::LEAF)
             return os << static_cast<const meta_polish_node &>(n);
@@ -211,7 +211,7 @@ namespace polish {
     }
 
     namespace detail {
-    
+
         // Node base storing structural information.
         class tree_node_base {
             using self = tree_node_base;
@@ -227,7 +227,7 @@ namespace polish {
             self *rc_;	        //right child
             self *parent_;	    //parent node
         };
-    
+
         // Actual node stored in tree.
         template<typename BaseNode>
         class tree_node : public tree_node_base, public BaseNode {
