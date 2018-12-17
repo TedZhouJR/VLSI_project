@@ -57,6 +57,8 @@ $(YAL_BIN_DIR)/%.o: $(YAL_SRC_DIR)/%.cpp
 $(SEQPAIR_BIN_DIR)/%.o: $(SEQPAIR_SRC_DIR)/%.cpp
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $^ -I $(AURELIANO_SRC_DIR) -I $(YAL_SRC_DIR) -o $@
 
+lexyacc: $(YAL_SRC_DIR)/scanner.cpp $(YAL_SRC_DIR)/parser.cpp
+
 $(YAL_SRC_DIR)/scanner.cpp: $(YAL_SRC_DIR)/scanner.l
 	flex -o $@ $<
 
