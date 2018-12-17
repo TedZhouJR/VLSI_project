@@ -331,24 +331,27 @@ namespace {
         using combine_type = typename basic_polish_node::combine_type;
         using tree_type = polish::polish_tree<>;
         using vctr_tree_type = polish::vectorized_polish_tree<>;
+        using const_iterator = typename vctr_tree_type::const_iterator;
 
-        SA(float init_accept_rate, float cooldown_speed_in, float balance_min_accrate_in,
+        SA(vctr_tree_type* vtree_in, float init_accept_rate, float cooldown_speed_in,
             int balance_minstep_in, float ending_temperature_in)
-        : eng_(std::random_device{}()), line_(80, '-') {
-            load_tree();
-            update_vbuf();
+        : /*eng_(std::random_device{}()), */line_(80, '-') {
+            vtree_ = *vtree_in;
+            srand((unsigned)time(NULL));
+            init_vbuf();
+            print();
             print_tree(vtree_);
             temperature = count_init_temprature(init_accept_rate);
+            std::cout << "init temperature " << temperature << endl;
             cooldown_speed = cooldown_speed_in;
             accept_under_currentT = total_under_currentT = 0;
-            balance_min_accrate = balance_min_accrate_in;
             balance_minstep = balance_minstep_in;
             ending_temperature = ending_temperature_in;
-
-            srand((unsigned)time(NULL));
+            best_solution = -1;
         }
 
         void take_step() {
+            // std::cout << "step" << endl;
             float pre_min_area, post_min_area;
             pre_min_area = count_min_area();
             struct operation op = random_operation();
@@ -371,8 +374,7 @@ namespace {
 
         //only if accept rate > constant1 and total step > constant2
         bool reach_balance() {
-            return ((float)accept_under_currentT / (float)total_under_currentT > balance_min_accrate
-                && total_under_currentT > balance_minstep);
+            return accept_under_currentT > balance_minstep;
         }
 
         void cool_down_by_ratio() {
@@ -395,6 +397,10 @@ namespace {
             print_tree(vtree_);
         }
 
+        float current_solution() {
+            return best_solution;
+        }
+
     private:
         template<typename Tree>
         static std::ostream &print_tree(const Tree &t,
@@ -405,16 +411,14 @@ namespace {
             return t.print_tree(os, 2);
         }
 
-        void print_vbuf() {
-            int count = vbuf_.size();
-            for (int i = 0; i < count; i++)
-            {
-                std::cout << vbuf_[i] << endl;
+        void init_vbuf() {
+            const_iterator it = vtree_.begin();
+            while (it != vtree_.end()) {
+                vbuf_.push_back(it);
+                it++;
             }
-        }
-
-        void update_vbuf() {
-            vbuf_.assign(vtree_.begin(), vtree_.end());
+            std::cout << vbuf_.size() << endl;
+            // vbuf_.assign(vtree_.begin(), vtree_.end());
         }
 
         void load_tree() {
@@ -438,19 +442,31 @@ namespace {
         }
 
         float count_init_temprature(float init_accept_rate) {
-            // TODO
-            std::cout << count_min_area() << endl;
-            return 2500.0;
+            float init_min_area = count_min_area();
+            float post_min_area, total_drop;
+            int N = 100;
+            for (int i = 0; i < N; i++) {
+                struct operation op = random_operation();
+                struct operation op_final = check_valid_and_go(op);
+                print();
+                post_min_area = count_min_area();
+                total_drop += abs(init_min_area - post_min_area);
+                goto_neighbor(op_final);   //recover previous state
+            }
+            return - total_drop / (100 * log(init_accept_rate));
         }
 
         float count_min_area() {
             // print_coord_list((std::prev(vbuf_in.end()))->points);
             float min_area = -1;
-            update_vbuf();
-            for (auto &&e : (std::prev(vbuf_.end()))->points) {
+            for (auto &&e : vbuf_.back()->points) {
                 if (e.first * e.second < min_area || min_area < 0) {
                     min_area = e.first * e.second;
                 }
+            }
+            if (min_area < best_solution || best_solution < 0) {
+                best_solution = min_area;
+                best_tree = vtree_;
             }
             return min_area;
         }
@@ -459,8 +475,8 @@ namespace {
             if (op.type == operation_type::M2) {
                 vtree_.invert_chain(vtree_.get(op.target1));
             } else {
-                auto i = vtree_.get(op.target1), j = vtree_.get(op.target2);
-                vtree_.swap_nodes(i, j);
+                vtree_.swap_nodes(vbuf_[op.target1], vbuf_[op.target2]);
+                std::swap(vbuf_[op.target1], vbuf_[op.target2]);
             }
         }
 
@@ -469,37 +485,40 @@ namespace {
             if (op.type == operation_type::M1) {
                 // std::cout<< "step M1 " << op.target1 << endl;
                 op.target1 = -1;
-                while (op.target2 < 0) {
+                while (op.target1 < 0) {
                     op.target2 = rand() % (vbuf_.size() - 1);
                     //如果是非叶节点，非法
-                    if (vbuf_[op.target1].type == combine_type::LEAF) {
+                    if (vbuf_[op.target2]->type == combine_type::LEAF) {
                         //找左边的相邻叶节点，找不到则非法
                         for (op.target1 = op.target2 - 1; op.target1 >= 0; op.target1--) {
-                            if (vbuf_[op.target1].type == combine_type::LEAF)
+                            if (vbuf_[op.target1]->type == combine_type::LEAF)
                                 break;
                         }
                     }
                 }
-                vtree_.swap_nodes(vtree_.get(op.target1), vtree_.get(op.target2));
+                vtree_.swap_nodes(vbuf_[op.target1], vbuf_[op.target2]);
+                std::swap(vbuf_[op.target1], vbuf_[op.target2]);
             } else if (op.type == operation_type::M2) {
                 // std::cout<< "step M2 " << op.target1 << endl;
                 //如果是叶节点，非法
-                while (vbuf_[op.target1].type == combine_type::LEAF) {
+                while (vbuf_[op.target1]->type == combine_type::LEAF) {
                     op.target1 = rand() % (vbuf_.size() - 1);
                 }
-                vtree_.invert_chain(vtree_.get(op.target1));
-            } else {
+                vtree_.invert_chain(vbuf_[op.target1]);
+            } else if (op.type == operation_type::M3) {
                 // std::cout<< "step M3 " << op.target1 << endl;
                 bool valid = false;
                 while (!valid) {
                     op.target2 = (rand() % (vbuf_.size() - 2)) + 1;
                     op.target1 = op.target2 - 1;
-                    if ((vbuf_[op.target1].type == combine_type::LEAF) xor
-                        (vbuf_[op.target2].type == combine_type::LEAF)) {
-                        valid = vtree_.swap_nodes(vtree_.get(op.target1), vtree_.get(op.target2));
+                    if ((vbuf_[op.target1]->type == combine_type::LEAF) xor
+                        (vbuf_[op.target2]->type == combine_type::LEAF)) {
+                        valid = vtree_.swap_nodes(vbuf_[op.target1], vbuf_[op.target2]);
                     }
                 }
+                std::swap(vbuf_[op.target1], vbuf_[op.target2]);
             }
+            // std::cout<< "finished" << endl;
             return op;
         }
 
@@ -528,13 +547,14 @@ namespace {
 
         std::vector<yal::Module> modules_;
         std::vector<expression::polish_expression_type> expr_;
-        std::vector<basic_vectorized_polish_node<>> vbuf_;
-        vctr_tree_type vtree_;
+        std::vector<const_iterator> vbuf_;
+        vctr_tree_type vtree_, best_tree;
         default_random_engine eng_;
         std::string line_;
         float temperature, cooldown_speed;
         int accept_under_currentT, total_under_currentT;
-        float balance_min_accrate, ending_temperature;
+        float ending_temperature;
+        float best_solution;
         int balance_minstep;
     };
 
