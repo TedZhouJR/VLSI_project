@@ -6,10 +6,12 @@
 #include <boost/compressed_pair.hpp>
 #include <cassert>
 #include <cstddef>
+#include <random>
 #include <vector>
 
 #include "module.h"
 #include "polish_node.hpp"
+#include "toolbox.h"
 
 namespace polish {
 
@@ -222,7 +224,9 @@ namespace polish {
 
         // Construct tree with a list of modules and a polish expression.
         template<typename RanIt, typename InIt>
-        bool construct(RanIt first_module, InIt first_expr, InIt last_expr) {
+        std::enable_if_t<aureliano::IsIterator<RanIt>::value
+            && aureliano::IsIterator<InIt>::value, bool>
+            construct(RanIt first_module, InIt first_expr, InIt last_expr) {
             std::vector<node_type *> stack;
             if (std::is_convertible<
                 typename std::iterator_traits<InIt>::iterator_category,
@@ -266,6 +270,55 @@ namespace polish {
             return pass;
         }
 
+        // Construct a random tree.
+        // @param first_module: begin of a yal::Module range
+        // @param first_idx, last_idx: a range of yal::Module indices
+        // @param eng: a random engine (e.g., std::default_random_engine>
+        // @return true (always)
+        template<typename RanIt, typename InIt, typename Eng>
+        std::enable_if_t<aureliano::IsIterator<RanIt>::value
+            && aureliano::IsIterator<InIt>::value
+            && !aureliano::IsIterator<Eng>::value, bool>
+            construct(RanIt first_module, InIt first_idx, InIt last_idx, Eng &&eng) {
+            if (first_idx == last_idx) {
+                clear();
+                return true;
+            }
+
+            std::vector<node_type *> trees, oprs;
+            if (std::is_convertible<
+                typename std::iterator_traits<InIt>::iterator_category,
+                std::forward_iterator_tag>::value) {
+                trees.reserve(std::distance(first_idx, last_idx));
+            }
+            for (auto i = first_idx; i != last_idx; ++i) {
+                trees.push_back(new_leaf(first_module[*i]));
+            }
+            oprs.resize(trees.size() - 1);
+            for (auto &p : oprs) {
+                p = new_operator(meta_polish_node::combine_type::HORIZONTAL);
+            }
+            node_type *new_root = make_random_tree(trees, oprs, std::forward<Eng>(eng));
+            clear();
+            attach_left(header(), new_root);
+            return true;
+        }
+
+        // Shuffle the tree using specified random engine.
+        template<typename Eng>
+        void shuffle(Eng &&eng) {
+            std::vector<node_type *> trees, oprs;
+            for (auto i = begin(); i != end(); ++i) {
+                node_type *t = get_iter_pointer(i);
+                if (t->type == meta_polish_node::combine_type::LEAF)
+                    trees.push_back(t);
+                else
+                    oprs.push_back(t);
+            }
+            node_type *new_root = make_random_tree(trees, oprs, std::forward<Eng>(eng));
+            attach_left(header(), new_root);
+        }
+
         void clear() {
             clear_tree(header()->lc());
             header()->lc() = nullptr;
@@ -286,6 +339,11 @@ namespace polish {
         // STL-like end.
         const_iterator end() const noexcept {
             return const_iterator(header());
+        }
+
+        // Iterator pointing to the root, end() if empty.
+        const_iterator root() const noexcept {
+            return empty() ? end() : const_iterator(header()->lc());
         }
 
         // Conduct M1 / M3 change.
@@ -564,6 +622,36 @@ namespace polish {
                 && t->check_area();
         }
 
+        template<typename Eng>
+        static node_type *make_random_tree(std::vector<node_type *> &trees,
+            std::vector<node_type *> &oprs, Eng &&eng) {
+            using namespace std;
+            assert(oprs.size() + 1 == trees.size());
+            random_shuffle(trees.begin(), trees.end());
+            bernoulli_distribution rand_bool;
+            while (trees.size() > 1) {
+                uniform_int_distribution<size_t> rand(0, trees.size() - 2);
+                size_t idx = rand(std::forward<Eng>(eng));
+                swap(trees[idx], trees[trees.size() - 2]);
+                swap(trees[idx + 1], trees.back());
+                node_type *opr = oprs.back();
+                oprs.pop_back();
+                attach_left(opr, trees[trees.size() - 2]);
+                attach_right(opr, trees.back());
+                if (opr->rc()->type != meta_polish_node::combine_type::LEAF) {
+                    opr->type = meta_polish_node::invert_combine_type(opr->rc()->type);
+                } else {
+                    opr->type = rand_bool(std::forward<Eng>(eng)) ?
+                        meta_polish_node::combine_type::HORIZONTAL :
+                        meta_polish_node::combine_type::VERTICAL;
+                }
+                opr->count_area();
+                trees.pop_back();
+                trees.back() = opr;
+            }
+            return trees.front();
+        }
+
         boost::compressed_pair<actual_allocator_type, node_type *> pair_;
     };
 
@@ -578,6 +666,7 @@ namespace polish {
         using typename base::traits;
         using typename base::alloc_traits;
         using typename base::node_type;
+        using typename base::actual_allocator_type;
 
     public:
         using typename base::combine_type;
@@ -654,6 +743,7 @@ namespace polish {
         using typename base::traits;
         using typename base::alloc_traits;
         using typename base::node_type;
+        using typename base::actual_allocator_type;
 
     public:
         using typename base::combine_type;

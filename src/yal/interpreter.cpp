@@ -28,6 +28,7 @@
 
 #include "interpreter.h"
 #include "module.h"
+#include <unordered_map>
 
 using namespace yal;
 
@@ -65,4 +66,25 @@ std::ostream & Interpreter::print(std::ostream & os,
 
 void Interpreter::switch_input_stream(std::istream &is) {
     m_scanner.switch_streams(&is, nullptr);
+}
+
+std::vector<std::size_t> Interpreter::make_module_index() const {
+    unordered_map<string, size_t> map;
+    map.reserve(m_modules.size());
+    size_t cnt = 0;
+    for (const Module &m : m_modules) {
+        auto ib = map.emplace(m.name, cnt++);
+        if (!ib.second) 
+            throw runtime_error("Conflicting module name: " + m.name);
+    }
+    vector<size_t> index;
+    index.reserve(m_parent.network.size());
+    for (const auto &e : m_parent.network) {
+        const string &name = ParentModule::get_module_name(e);
+        auto it = map.find(name);
+        if (it == map.end())
+            throw runtime_error("Invalid module name: " + name);
+        index.push_back(it->second);
+    }
+    return index;
 }

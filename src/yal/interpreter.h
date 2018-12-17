@@ -89,6 +89,10 @@ namespace yal {
             return m_parent;
         }
 
+        // Compute indices of modulenames in the parent module.
+        // @throw runtime_error if module name conflict or invalid
+        std::vector<std::size_t> make_module_index() const;
+
     private:
         void columns(int count = 1) {
             m_location.columns(count);
