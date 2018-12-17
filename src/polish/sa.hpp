@@ -9,23 +9,14 @@
 #include <random>
 #include <string>
 
+#include <boost/pool/pool_alloc.hpp>
+
 #include "polish_tree.hpp"
 
 using namespace std;
 using namespace polish;
 
-#define MY_ASSERT(expr) !!(expr) || error(#expr, __LINE__)
-#define SHOW_STARTING_TEST() do { \
-cout << "Starting " << __FUNCTION__ << "..." << endl; } while (false)
-
 namespace {
-
-    bool error(const char *expr, int line) {
-        cerr << "Debug assertion failed: " << expr
-            << ", test.cpp (" << line << ")" << endl;
-        exit(EXIT_FAILURE);
-        return false;
-    }
 
     enum class operation_type {
         M1, M2, M3
@@ -41,17 +32,19 @@ namespace {
     public:
         using combine_type = typename basic_polish_node::combine_type;
         using tree_type = polish::polish_tree<>;
-        using vctr_tree_type = polish::vectorized_polish_tree<>;
+        using vctr_tree_type = polish::vectorized_polish_tree<
+            boost::fast_pool_allocator<polish::basic_vectorized_polish_node<
+            boost::fast_pool_allocator<meta_polish_node::coord_type>>>>;
         using const_iterator = typename vctr_tree_type::const_iterator;
 
         SA(vctr_tree_type* vtree_in, int best_curve_in, double init_accept_rate, double cooldown_speed_in, double ending_temperature_in)
-        : /*eng_(std::random_device{}()), */line_(80, '-') {
+        {
             vtree_ = *vtree_in;
-            // srand((unsigned)time(NULL));
+            srand((unsigned)time(NULL));
             srand(1);
             init_vbuf();
             temperature = count_init_temprature(init_accept_rate);
-            std::cout << "init temperature " << temperature << endl;
+            std::cerr << "init temperature " << temperature << endl;
             cooldown_speed = cooldown_speed_in;
             accept_under_currentT = total_under_currentT = 0;
             ending_temperature = ending_temperature_in;
@@ -61,7 +54,7 @@ namespace {
         }
 
         void take_step() {
-            // std::cout << "step" << endl;
+            // std::cerr << "step" << endl;
             int pre_min_area, post_min_area;
             pre_min_area = count_min_area();
             struct operation op = random_operation();
@@ -106,8 +99,8 @@ namespace {
         }
 
         double print_current_solution() {
-            std::cout << "minimum area is " << best_solution << endl;
-            std::cout << "utility is " << (double)tot_block_area / best_solution << endl;
+            std::cerr << "minimum area is " << best_solution << endl;
+            std::cerr << "utility is " << (double)tot_block_area / best_solution << endl;
             return (double)tot_block_area / best_solution;
         }
 
@@ -122,7 +115,7 @@ namespace {
     private:
         template<typename Tree>
         static std::ostream &print_tree(const Tree &t,
-            std::ostream &os = std::cout) {
+            std::ostream &os = std::cerr) {
             for (const auto &e : t)
                 os << e << " ";
             os << endl;
@@ -194,7 +187,7 @@ namespace {
         //检查操作合法性，校正并执行操作
         struct operation check_valid_and_go(struct operation op) {
             if (op.type == operation_type::M1) {
-                // std::cout<< "step M1 " << op.target1 << endl;
+                // std::cerr<< "step M1 " << op.target1 << endl;
                 op.target1 = -1;
                 while (op.target1 < 0) {
                     op.target2 = rand() % (vbuf_.size() - 1);
@@ -210,14 +203,14 @@ namespace {
                 vtree_.swap_nodes(vbuf_[op.target1], vbuf_[op.target2]);
                 std::swap(vbuf_[op.target1], vbuf_[op.target2]);
             } else if (op.type == operation_type::M2) {
-                // std::cout<< "step M2 " << op.target1 << endl;
+                // std::cerr<< "step M2 " << op.target1 << endl;
                 //如果是叶节点，非法
                 while (vbuf_[op.target1]->type == combine_type::LEAF) {
                     op.target1 = rand() % (vbuf_.size() - 1);
                 }
                 vtree_.invert_chain(vbuf_[op.target1]);
             } else if (op.type == operation_type::M3) {
-                // std::cout<< "step M3 " << op.target1 << endl;
+                // std::cerr<< "step M3 " << op.target1 << endl;
                 bool valid = false;
                 while (!valid) {
                     op.target2 = (rand() % (vbuf_.size() - 2)) + 1;
@@ -229,7 +222,7 @@ namespace {
                 }
                 std::swap(vbuf_[op.target1], vbuf_[op.target2]);
             }
-            // std::cout<< "finished" << endl;
+            // std::cerr<< "finished" << endl;
             return op;
         }
 
@@ -250,18 +243,14 @@ namespace {
 
         template<typename Cont>
         static std::ostream &print_coord_list(Cont &&cont,
-            std::ostream &os = std::cout) {
+            std::ostream &os = std::cerr) {
             for (auto &&e : cont)
-                cout << "(" << e.first << "," << e.second << ") ";
+                cerr << "(" << e.first << "," << e.second << ") ";
             return os;
         }
 
-        std::vector<yal::Module> modules_;
-        std::vector<expression::polish_expression_type> expr_;
         std::vector<const_iterator> vbuf_, best_buf;
         vctr_tree_type vtree_, best_tree;
-        default_random_engine eng_;
-        std::string line_;
         float temperature, cooldown_speed;
         int accept_under_currentT, total_under_currentT;
         float ending_temperature;

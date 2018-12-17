@@ -831,20 +831,16 @@ namespace polish {
             }
 
             if (t->type == combine_type::VERTICAL) {
-                auto lpos = std::lower_bound(t->lc()->points.cbegin(),
+                auto lpos = std::prev(std::upper_bound(t->lc()->points.cbegin(),
                     t->lc()->points.cend(), shape,
                     [](const coord_type &a, const coord_type &b) {
                     return a.first < b.first;
-                });
-                if (lpos == t->lc()->points.cend())
-                    --lpos;
-                auto rpos = std::lower_bound(t->rc()->points.cbegin(),
+                }));
+                auto rpos = std::prev(std::upper_bound(t->rc()->points.cbegin(),
                     t->rc()->points.cend(), shape,
                     [](const coord_type &a, const coord_type &b) {
                     return a.first < b.first;
-                });
-                if (rpos == t->rc()->points.cend())
-                    --rpos;
+                }));
                 dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(),
                     xoff, yoff, dst);
                 dst = floorplan_impl(t->rc(), rpos - t->rc()->points.cbegin(),
@@ -855,15 +851,11 @@ namespace polish {
                     [](const coord_type &a, const coord_type &b) {
                     return a.second > b.second;
                 });
-                if (lpos == t->lc()->points.cend())
-                    --lpos;
                 auto rpos = std::lower_bound(t->rc()->points.cbegin(),
                     t->rc()->points.cend(), shape,
                     [](const coord_type &a, const coord_type &b) {
                     return a.second > b.second;
                 });
-                if (rpos == t->rc()->points.cend())
-                    --rpos;
                 dst = floorplan_impl(t->lc(), lpos - t->lc()->points.cbegin(),
                     xoff, yoff, dst);
                 dst = floorplan_impl(t->rc(), rpos - t->rc()->points.cbegin(),

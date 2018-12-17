@@ -26,7 +26,9 @@ namespace po = boost::program_options;
 
 namespace {
     using dimension_type = typename polish::basic_polish_node::dimension_type;
-    using vtree_type = typename polish::vectorized_polish_tree<>;
+    using vtree_type = polish::vectorized_polish_tree<
+        boost::fast_pool_allocator<polish::basic_vectorized_polish_node<
+        boost::fast_pool_allocator<meta_polish_node::coord_type>>>>;
     bool intersects(dimension_type lo0, dimension_type hi0,
         dimension_type lo1, dimension_type hi1) {
         return (lo0 < hi1) ^ (lo1 >= hi0);
@@ -109,27 +111,25 @@ namespace {
         return map;
     }
 
-    void run_vectorized_polish_tree(const yal::Interpreter &interpreter) {
-        cout << "Start simulate anneal..." << endl;
-        polish::vectorized_polish_tree<> vtree;
+    void run_vectorized_polish_tree(const yal::Interpreter &interpreter, 
+        int rounds, std::ostream &out) {
+        cerr <<  "Start simulate anneal..." << endl;
+        vtree_type vtree;
         std::vector<typename polish::vectorized_polish_tree<>::floorplan_entry> result;
         auto module_index = interpreter.make_module_index();
-        default_random_engine eng;  // (random_device{}()); // TODO: turn this on later
+        default_random_engine eng(random_device{}()); 
         vtree.construct(interpreter.modules().cbegin(),
             module_index.cbegin(), module_index.cend(), eng);
-        cout << distance(vtree.begin(), vtree.end()) << endl;
-        if (!vtree.check_integrity())
-            cout << "Boom!" << endl;
         double init_accept_rate = 0.95, cooldown_speed = 0.01, ending_temperature = 20;
         int utility_stable = 0, pre_utility = 0, utility, best_curve;
-        while (utility_stable < 1) {
+        while (utility_stable < rounds) {
             SA sa(&vtree, best_curve, init_accept_rate, cooldown_speed, ending_temperature);
             while (!sa.reach_end()) {
                 while (!sa.reach_balance()) {
                     sa.take_step();
                 }
                 sa.cool_down_by_ratio();
-                // cout << "cool down" << endl;
+                // cerr <<  "cool down" << endl;
             }
             utility = sa.print_current_solution();
             if (pre_utility == utility) {
@@ -143,13 +143,14 @@ namespace {
         }
         vtree.floorplan(best_curve, back_inserter(result));
         for (auto &&e: result) {
-            std::cout << std::get<0>(e) << " " << std::get<1>(e) << " " << std::get<2>(e) << " " << std::get<3>(e) << std::endl;
+            out << std::get<0>(e) << " " << std::get<1>(e) << " " << std::get<2>(e) << " " << std::get<3>(e) << std::endl;
         }
-        std::cout << "check_integrity is " << vtree.check_integrity() << endl;
         if (!check_intersection(result.begin(), result.end()))
-            std::cout << "intersections error!!" << std::endl;
+            std::cerr <<  "Intersections error!!" << std::endl;
+        else
+            std::cerr <<  "Answer accepted." << endl;
         //sa.print();
-        //cout << "passed, result is : " << sa.current_solution() << endl;
+        //cerr <<  "passed, result is : " << sa.current_solution() << endl;
     }
 
 }
@@ -163,10 +164,12 @@ int main(int argc, char **argv) {
             "input YAL file (default cin)")
         ("output,o", po::value< vector<string> >(),
             "output placement file (default cout)")
+        ("rounds,r", po::value<int>()->default_value(10),
+            "rounds for polish")
         ("option,O", po::value< vector<string> >(),
             "option file for lcs/dag")
         ("method,m", po::value< vector<string> >(),
-            "method (polish-v/lcs/dag, default polish-v)")
+            "method (polish/lcs/dag, default polish)")
         ("verbose,v", po::value<int>()->default_value(1)->implicit_value(2),
             "verbose level (0-2)")
         ;
@@ -176,17 +179,17 @@ int main(int argc, char **argv) {
     po::notify(vm);
 
     if (vm.count("help")) {
-        cout << desc << "\n";
+        cerr <<  desc << "\n";
         return 1;
     }
 
     try {
-        string method = "polish-v";
+        string method = "polish";
         if (vm.count("method")) {
             method = vm["method"].as<vector<string>>().back();
             for (auto &e : method)
                 e = tolower(e);
-            if (method != "lcs" && method != "dag" && method != "polish-v")
+            if (method != "lcs" && method != "dag" && method != "polish")
                 throw runtime_error("Unrecognized method: " + method);
         }
 
@@ -205,9 +208,23 @@ int main(int argc, char **argv) {
 
         interpreter.parse();
 
-        if (method == "polish-v") {
-            cout << "Method: polish-v" << endl;
-            run_vectorized_polish_tree(interpreter);
+        ostream *out = &cout;
+        ofstream fout;
+        if (vm.count("output")) {
+            fout.open(vm["output"].as<vector<string>>().back());
+            out = &fout;
+        }
+
+        if (method == "polish") {
+            cerr <<  "Method: polish" << endl;
+            int rounds = vm["rounds"].as<int>();
+            if (rounds < 0) {
+                cerr << "Warning: negative rounds argument; using 10." << endl;
+                rounds = 10;
+            }
+            cerr << "Rounds: " << rounds << endl;
+
+            run_vectorized_polish_tree(interpreter, rounds, *out);
 
         } else {
             // LCS or DAG
@@ -231,13 +248,6 @@ int main(int argc, char **argv) {
             } else {
                 opts.simulaions_per_temperature
                     = max(30 * layout.size(), static_cast<size_t>(1024));
-            }
-
-            ostream *out = &cout;
-            ofstream fout;
-            if (vm.count("output")) {
-                fout.open(vm["output"].as<vector<string>>().back());
-                out = &fout;
             }
 
             int verbose_level = vm["verbose"].as<int>();

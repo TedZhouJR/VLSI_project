@@ -255,6 +255,10 @@ BOOST_FIXTURE_TEST_CASE(test_vtree_floorplan, BasicFixture) {
         result.clear();
         vtree.floorplan(i, std::back_inserter(result));
         BOOST_TEST(check_intersection(result.cbegin(), result.cend()));
+        for (auto &&e : result) {
+            cout << get<0>(e) << " " << get<1>(e) << " " << get<2>(e) << " " << get<3>(e) << endl;
+        }
+        cout << string(80, '-') << endl;
     }
 }
 
