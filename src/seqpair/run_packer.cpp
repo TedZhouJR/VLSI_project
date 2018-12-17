@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 
+#include <boost/program_options.hpp>
 #include <boost/pool/pool_alloc.hpp>
 
 #include "timeit.h"
@@ -19,13 +20,14 @@
 
 using namespace std;
 using namespace seqpair;
+namespace po = boost::program_options;
 
 namespace {
 
     template<typename Generator, typename Alloc, typename FwdIt>
     void run_packer(SaPacker<Generator> &packer, Layout<Alloc> &layout, 
         FwdIt first_line, FwdIt last_line, ostream &out, 
-        unsigned verbose_level) {
+        int verbose_level) {
         using namespace seqpair::verification;
         using change_t = PackGeneratorBase::change_t;
 
@@ -72,75 +74,79 @@ namespace {
         out << layout.format(format_policy::no_delim);
     }
 
-    void print_usage() {
-        cerr << "Usage: rect_file\n"
-            "[result_file=cout] [method=lcs] [verbose_level=1] [option_file]\n";
-    }
 }
 
 int main(int argc, char **argv) {
+    po::options_description desc("Options");
+    desc.add_options()
+        ("help,h", 
+            "show help message")
+        ("input,i", po::value< vector<string> >(), 
+            "input YAL file (default cin)")
+        ("output,o", po::value< vector<string> >(), 
+            "output placement file (default cout)")
+        ("option,O", po::value< vector<string> >(), 
+            "option file")
+        ("method,m", po::value< vector<string> >(), 
+            "method (lcs/dag, default lcs)")
+        ("verbose,v", po::value<int>()->default_value(1)->implicit_value(2), 
+            "verbose level (0-2)")
+        ;
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        cout << desc << "\n";
+        return 1;
+    }
+
     try {
-        bool is_argv_valid = false;
-        if (argc < 2) {
-            print_usage();
-            return EXIT_FAILURE;
-        }
-
-        string rect_file = argv[1], result_file = "cout";
-        if (argc > 2)
-            result_file = argv[2];
-        double alpha = 1;
         string method = "lcs";
-        if (argc > 3)
-            method = argv[3];
-        unsigned verbose_level = 1;
-        if (argc > 4)
-            verbose_level = strtoul(argv[4], nullptr, 10);
-        string opt_file;
-        if (argc > 5)
-            opt_file = argv[5];
-        if (argc > 6)
-            cerr << "Warning: extra command-line arguments are ommitted." << "\n";
-
-        for (auto &e : method)
-            e = tolower(e);
-        if (method == "lcs" || method == "dag")
-            is_argv_valid = true;
-        if (!is_argv_valid) {
-            print_usage();
-            return EXIT_FAILURE;
+        if (vm.count("method")) {
+            method = vm["method"].as<vector<string>>().back();
+            for (auto &e : method)
+                e = tolower(e);
+            if (method != "lcs" && method != "dag")
+                throw runtime_error("Unrecognized method: " + method);
         }
 
         Layout<> layout;
-        {
-            ifstream in(rect_file);
+        if (vm.count("input")) {
+            auto &&v = vm["input"].as<vector<string>>();
+            ifstream in(vm["input"].as<vector<string>>().back());
             if (!in.is_open())
                 throw runtime_error("Cannot open file");
             in >> layout;
+        } else {
+            cin >> layout;
         }
 
-        vector<pair<size_t, size_t>> nets;
-
         SaPackerBase::options_t opts;
-        if (!opt_file.empty()) {
-            ifstream in(opt_file);
+        if (vm.count("option")) {
+            ifstream in(vm["option"].as<vector<string>>().back());
             if (!in.is_open())
                 throw runtime_error("Cannot open file");
             in >> opts; // Params
         } else {
-            opts.simulaions_per_temperature = max(30 * layout.size(), static_cast<size_t>(1024));
+            opts.simulaions_per_temperature
+                = max(30 * layout.size(), static_cast<size_t>(1024));
         }
 
-        cerr << "Rectangles: " << layout.size() << "\n";
-        cerr << "Alpha: " << alpha << "\n" << "\n";
-        SaPackerBase::default_energy_function func(alpha);
-        
         ostream *out = &cout;
         ofstream fout;
-        if (result_file != "cout") {
-            fout.open(result_file);
+        if (vm.count("output")) {
+            fout.open(vm["output"].as<vector<string>>().back());
             out = &fout;
         }
+
+        int verbose_level = vm["verbose"].as<int>();
+
+        vector<pair<size_t, size_t>> nets;
+
+        cerr << "Rectangles: " << layout.size() << "\n";
+        SaPackerBase::default_energy_function func(1.0);
 
         if (method == "dag") {
             cerr << "Method: DAG" << "\n";
@@ -156,10 +162,10 @@ int main(int argc, char **argv) {
             assert(false);
         }
 
-    } catch (std::exception &e) {
+    } catch (const std::exception &e) {
         cerr << e.what() << "\n";
         return EXIT_FAILURE;
     }
-    
+
     return EXIT_SUCCESS;
 }

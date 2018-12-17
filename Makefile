@@ -50,7 +50,7 @@ $(POLISH_TEST): $(POLISH_OBJ_LIST) $(YAL_BIN_DIR)/module.o
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -lboost_unit_test_framework -o $@
 
 $(SEQPAIR_TARGET): $(SEQPAIR_OBJ_LIST)
-	$(CC) -DNDEBUG -std=c++14 -O2 $^ -o $@
+	$(CC) -DNDEBUG -std=c++14 -O2 $^ -lboost_program_options -o $@
 
 clean:
 	rm -f $(POLISH_BIN_DIR)/*.o

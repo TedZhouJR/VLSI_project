@@ -148,7 +148,7 @@ namespace seqpair {
             typename ChgDist = generator_default_change_distribution>
             double operator()(Layout<LayoutAlloc> &layout, FwdIt first_line, FwdIt last_line,
                 ChgDist &&chg_dist = ChgDist(), //Alloc &&alloc = Alloc(), 
-                unsigned verbose_level = 1) {
+                int verbose_level = 1) {
             using namespace std;
             if (layout.empty())
                 return 0;
