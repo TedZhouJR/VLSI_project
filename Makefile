@@ -40,7 +40,7 @@ SEQPAIR_TARGET = $(BIN_DIR)/seq_pair
 
 TARGET_LIST = $(TARGET) $(POLISH_TEST) $(YAL_TARGET) $(SEQPAIR_TARGET)
 
-.PHONY: all, clean
+.PHONY: all, clean, lexyacc
 
 all: $(TARGET_LIST)
 
@@ -76,6 +76,8 @@ $(YAL_TARGET): $(YAL_SRC_DIR)/scanner.cpp $(YAL_SRC_DIR)/parser.cpp $(YAL_OBJ_LI
 
 $(SEQPAIR_TARGET): $(SEQPAIR_OBJ_LIST) $(filter-out $(YAL_MAIN_OBJ), $(YAL_OBJ_LIST))
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -lboost_program_options -o $@
+
+lexyacc: $(YAL_SRC_DIR)/scanner.cpp $(YAL_SRC_DIR)/parser.cpp
 
 clean:
 	rm -f $(POLISH_BIN_DIR)/*.o

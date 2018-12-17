@@ -49,8 +49,6 @@ namespace {
             vtree_ = *vtree_in;
             srand((unsigned)time(NULL));
             init_vbuf();
-            print();
-            print_tree(vtree_);
             temperature = count_init_temprature(init_accept_rate);
             std::cout << "init temperature " << temperature << endl;
             cooldown_speed = cooldown_speed_in;
@@ -138,7 +136,6 @@ namespace {
                 it++;
                 balance_minstep += 40;
             }
-            std::cout << vbuf_.size() << endl;
         }
 
         double count_init_temprature(double init_accept_rate) {
@@ -148,7 +145,6 @@ namespace {
             for (int i = 0; i < N; i++) {
                 struct operation op = random_operation();
                 struct operation op_final = check_valid_and_go(op);
-                print();
                 post_min_area = count_min_area();
                 total_drop += abs(init_min_area - post_min_area);
                 goto_neighbor(op_final);   //recover previous state
