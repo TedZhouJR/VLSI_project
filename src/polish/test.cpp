@@ -70,6 +70,15 @@ namespace {
         });
     }
 
+    template<typename Tree>
+    bool test_normalized(const Tree &t) {
+        return std::adjacent_find(t.begin(), t.end(), 
+            [](const auto &a, const auto &b) {
+            return a.type != meta_polish_node::combine_type::LEAF
+                && a.type == b.type;
+        }) == t.end();
+    }
+
     bool intersects(dimension_type lo0, dimension_type hi0, 
         dimension_type lo1, dimension_type hi1) {
         return (lo0 < hi1) ^ (lo1 >= hi0);
@@ -120,9 +129,9 @@ BOOST_AUTO_TEST_CASE(test_ebo) {
     BOOST_TEST(sizeof(tree_type) == sizeof(void *));
 }
 
-using m3_test_types = boost::mpl::list<tree_type, vtree_type>;
+using tree_types = boost::mpl::list<tree_type, vtree_type>;
 
-BOOST_AUTO_TEST_CASE_TEMPLATE(m3_test, Tree, m3_test_types) {
+BOOST_AUTO_TEST_CASE_TEMPLATE(m3_test, Tree, tree_types) {
     std::vector<yal::Module> modules(1);
     std::vector<expression::polish_expression_type> expr;
     uniform_int_distribution<size_t> rand_size(3, 512),
@@ -244,6 +253,34 @@ BOOST_FIXTURE_TEST_CASE(test_vtree_floorplan, BasicFixture) {
         result.clear();
         vtree.floorplan(i, std::back_inserter(result));
         BOOST_TEST(check_intersection(result.cbegin(), result.cend()));
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(test_tree_random_construct, BasicFixture) {
+    tree_type tree;
+    vector<size_t> indices(modules.size());
+    iota(indices.begin(), indices.end(), 0);
+    for (size_t i = 0; i != 16; ++i) {
+        BOOST_TEST((tree.construct(modules.begin(), 
+            indices.begin(), indices.end(), eng)));
+        BOOST_TEST((tree.check_integrity()));
+        BOOST_TEST((test_traversal(tree)));
+        BOOST_TEST((std::distance(tree.begin(), tree.end()) 
+            == 2 * modules.size() - 1));
+        BOOST_TEST((test_normalized(tree)));
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(test_tree_shuffle, BasicFixture) {
+    tree_type tree;
+    tree.construct(modules, expr);
+    for (size_t i = 0; i != 16; ++i) {
+        tree.shuffle(eng);
+        BOOST_TEST((tree.check_integrity()));
+        BOOST_TEST((test_traversal(tree)));
+        BOOST_TEST((std::distance(tree.begin(), 
+            tree.end()) == 2 * modules.size() - 1));
+        BOOST_TEST((test_normalized(tree)));
     }
 }
 
