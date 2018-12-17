@@ -106,8 +106,8 @@ namespace {
             print_tree(vtree_);
         }
 
-        float current_solution() {
-            return best_solution;
+        void print_current_solution() {
+            std::cout << "minimum area is " << best_solution << endl;
         }
 
     private:
@@ -157,6 +157,7 @@ namespace {
             }
             if (min_area < best_solution || best_solution < 0) {
                 best_solution = min_area;
+                best_buf = vbuf_;
                 best_tree = vtree_;
             }
             return min_area;
@@ -238,7 +239,7 @@ namespace {
 
         std::vector<yal::Module> modules_;
         std::vector<expression::polish_expression_type> expr_;
-        std::vector<const_iterator> vbuf_;
+        std::vector<const_iterator> vbuf_, best_buf;
         vctr_tree_type vtree_, best_tree;
         default_random_engine eng_;
         std::string line_;

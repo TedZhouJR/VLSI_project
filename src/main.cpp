@@ -40,8 +40,7 @@ int main(int argc, char **argv) {
         sa.cool_down_by_ratio();
         // cout << "cool down" << endl;
     }
-    sa.print();
-    cout << "passed, result is : " << sa.current_solution() << endl;
+    sa.print_current_solution();
 
     return 0;
 }
