@@ -210,7 +210,8 @@ namespace polish {
                 // NOTE: self-assignment goes here
                 node_type *new_root = copy_tree(other.header()->lc());
                 clear();
-                attach_left(header(), new_root);
+                if (new_root)
+                    attach_left(header(), new_root);
             }
             return *this;
         }
@@ -307,6 +308,8 @@ namespace polish {
         // Shuffle the tree using specified random engine.
         template<typename Eng>
         void shuffle(Eng &&eng) {
+            if (empty())
+                return;
             std::vector<node_type *> trees, oprs;
             for (auto i = begin(); i != end(); ++i) {
                 node_type *t = get_iter_pointer(i);
@@ -318,6 +321,15 @@ namespace polish {
             node_type *new_root = make_random_tree(trees, oprs, std::forward<Eng>(eng));
             attach_left(header(), new_root);
         }
+
+        //void assign(const_iterator first, const_iterator last) {
+        //    std::vector<node_type *> stack;
+        //    for (; first != last; ++first) {
+
+
+        //    }
+        //    asser
+        //}
 
         void clear() {
             clear_tree(header()->lc());

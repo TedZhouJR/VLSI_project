@@ -31,6 +31,7 @@ YAL_SRC_TMP_LIST := $(addprefix $(YAL_SRC_DIR)/, $(YAL_SRC_TMP_LIST))
 
 SEQPAIR_SRC_LIST = $(wildcard $(SEQPAIR_SRC_DIR)/*.cpp)
 SEQPAIR_OBJ_LIST = $(addprefix $(SEQPAIR_BIN_DIR)/, $(notdir $(SEQPAIR_SRC_LIST:.cpp=.o)))
+SEQPAIR_MAIN_OBJ = $(SEQPAIR_BIN_DIR)/run_packer.o
 
 TARGET = $(BIN_DIR)/main
 POLISH_TEST = $(BIN_DIR)/test_polish
@@ -44,7 +45,8 @@ TARGET_LIST = $(TARGET) $(POLISH_TEST) $(YAL_TARGET) $(SEQPAIR_TARGET)
 all: $(TARGET_LIST)
 
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp
-	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(AURELIANO_SRC_DIR) -I $(POLISH_SRC_DIR) -I $(YAL_SRC_DIR) $^ -o $@ 
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(AURELIANO_SRC_DIR) \
+	-I $(POLISH_SRC_DIR) -I $(YAL_SRC_DIR) -I $(SEQPAIR_SRC_DIR) $^ -o $@ 
 
 $(POLISH_BIN_DIR)/%.o: $(POLISH_SRC_DIR)/%.cpp
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(YAL_SRC_DIR) -I $(AURELIANO_SRC_DIR) $^ -o $@ 
@@ -61,8 +63,10 @@ $(YAL_SRC_DIR)/scanner.cpp: $(YAL_SRC_DIR)/scanner.l
 $(YAL_SRC_DIR)/parser.cpp: $(YAL_SRC_DIR)/parser.y
 	bison -o $@ -Wno-other $<
 
-$(TARGET): $(BIN_DIR)/main.o $(filter-out $(POLISH_TEST_OBJ), $(POLISH_OBJ_LIST)) $(YAL_BIN_DIR)/module.o
-	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@
+$(TARGET): $(BIN_DIR)/main.o $(filter-out $(POLISH_TEST_OBJ), \
+$(POLISH_OBJ_LIST)) $(filter-out $(YAL_MAIN_OBJ), $(YAL_OBJ_LIST)) \
+$(filter-out $(SEQPAIR_MAIN_OBJ), $(SEQPAIR_OBJ_LIST))
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -lboost_program_options -o $@
 
 $(POLISH_TEST): $(POLISH_OBJ_LIST) $(YAL_BIN_DIR)/module.o
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -lboost_unit_test_framework -o $@
