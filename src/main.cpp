@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
         ("output,o", po::value< vector<string> >(),
             "output placement file (default cout)")
         ("option,O", po::value< vector<string> >(),
-            "option file")
+            "option file for lcs/dag")
         ("method,m", po::value< vector<string> >(),
             "method (polish-v/lcs/dag, default polish-v)")
         ("verbose,v", po::value<int>()->default_value(1)->implicit_value(2),
@@ -193,12 +193,16 @@ int main(int argc, char **argv) {
         yal::Interpreter interpreter;
         ifstream fin;
         if (vm.count("input")) {
-            auto &&v = vm["input"].as<vector<string>>();
-            fin.open(vm["input"].as<vector<string>>().back());
+            auto &&filename = vm["input"].as<vector<string>>().back();
+            cerr << "Input stream: " << filename << endl;
+            fin.open(filename);
             if (!fin.is_open())
                 throw runtime_error("Cannot open file");
             interpreter.switch_input_stream(fin);
+        } else {
+            cerr << "Input stream: cin" << endl;
         }
+
         interpreter.parse();
 
         if (method == "polish-v") {

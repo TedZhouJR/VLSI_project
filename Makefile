@@ -40,9 +40,11 @@ SEQPAIR_TARGET = $(BIN_DIR)/seq_pair
 
 TARGET_LIST = $(TARGET) $(POLISH_TEST) $(YAL_TARGET) $(SEQPAIR_TARGET)
 
-.PHONY: all, clean, lexyacc
+.PHONY: lexyacc, all, clean
 
-all: $(TARGET_LIST)
+all: lexyacc, $(TARGET_LIST)
+
+lexyacc: $(YAL_SRC_DIR)/scanner.cpp $(YAL_SRC_DIR)/parser.cpp
 
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c -I $(AURELIANO_SRC_DIR) \
@@ -57,23 +59,21 @@ $(YAL_BIN_DIR)/%.o: $(YAL_SRC_DIR)/%.cpp
 $(SEQPAIR_BIN_DIR)/%.o: $(SEQPAIR_SRC_DIR)/%.cpp
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $^ -I $(AURELIANO_SRC_DIR) -I $(YAL_SRC_DIR) -o $@
 
-lexyacc: $(YAL_SRC_DIR)/scanner.cpp $(YAL_SRC_DIR)/parser.cpp
-
 $(YAL_SRC_DIR)/scanner.cpp: $(YAL_SRC_DIR)/scanner.l
 	flex -o $@ $<
 
 $(YAL_SRC_DIR)/parser.cpp: $(YAL_SRC_DIR)/parser.y
 	bison -o $@ -Wno-other $<
 
-$(TARGET): $(BIN_DIR)/main.o $(filter-out $(POLISH_TEST_OBJ), \
+$(TARGET): lexyacc $(BIN_DIR)/main.o $(filter-out $(POLISH_TEST_OBJ), \
 $(POLISH_OBJ_LIST)) $(filter-out $(YAL_MAIN_OBJ), $(YAL_OBJ_LIST)) \
 $(filter-out $(SEQPAIR_MAIN_OBJ), $(SEQPAIR_OBJ_LIST))
-	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -lboost_program_options -o $@
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) $(filter-out lexyacc, $^) -lboost_program_options -o $@
 
 $(POLISH_TEST): $(POLISH_OBJ_LIST) $(YAL_BIN_DIR)/module.o
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -lboost_unit_test_framework -o $@
 
-$(YAL_TARGET): $(YAL_SRC_DIR)/scanner.cpp $(YAL_SRC_DIR)/parser.cpp $(YAL_OBJ_LIST)
+$(YAL_TARGET): lexyacc $(YAL_OBJ_LIST)
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $(YAL_OBJ_LIST) -o $@
 
 $(SEQPAIR_TARGET): $(SEQPAIR_OBJ_LIST) $(filter-out $(YAL_MAIN_OBJ), $(YAL_OBJ_LIST))

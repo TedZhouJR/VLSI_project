@@ -42,34 +42,7 @@ namespace seqpair {
 
     bool intersects(const Rect &r0, const Rect &r1) noexcept;
 
-#ifdef SEQPAIR_IO_INLINE
-    inline std::istream &operator>>(std::istream &in, Rect &r) {
-        in >> r.pos.x >> r.pos.y;
-        int right, top;
-        in >> right >> top;
-        r.width = right - r.left();
-        r.height = top - r.bottom();
-        return in;
-    }
-
-    inline std::ostream &operator<<(std::ostream &out, const Rect &r) {
-        return out << "(" << r.pos.x << ", " << r.pos.y << ") - (" <<
-            r.pos.x + r.width << ", " << r.pos.y + r.height << ")";
-    }
-
-    inline std::ostream &operator<<(std::ostream &out, const typename Rect::formatted &r) {
-        const auto &rect = r.rect;
-        if (r.format_policy == Rect::format_policy::delim) {
-            out << rect;
-        } else {
-            out << rect.pos.x << " " << rect.pos.y << " " <<
-                rect.pos.x + rect.width << " " << rect.pos.y + rect.height;
-        }
-        return out;
-    }
-#else
     std::istream &operator>>(std::istream &in, Rect &r);
     std::ostream &operator<<(std::ostream &out, const Rect &r);
     std::ostream &operator<<(std::ostream &out, const typename Rect::formatted &r);
-#endif
 }
