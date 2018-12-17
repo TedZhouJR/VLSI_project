@@ -44,7 +44,7 @@ namespace {
         using vctr_tree_type = polish::vectorized_polish_tree<>;
         using const_iterator = typename vctr_tree_type::const_iterator;
 
-        SA(vctr_tree_type* vtree_in, float init_accept_rate, float cooldown_speed_in, float ending_temperature_in)
+        SA(vctr_tree_type* vtree_in, double init_accept_rate, double cooldown_speed_in, double ending_temperature_in)
         : /*eng_(std::random_device{}()), */line_(80, '-') {
             vtree_ = *vtree_in;
             srand((unsigned)time(NULL));
@@ -57,18 +57,19 @@ namespace {
             accept_under_currentT = total_under_currentT = 0;
             ending_temperature = ending_temperature_in;
             best_solution = -1;
+            tot_block_area = count_tot_block_area();
         }
 
         void take_step() {
             // std::cout << "step" << endl;
-            float pre_min_area, post_min_area;
+            int pre_min_area, post_min_area;
             pre_min_area = count_min_area();
             struct operation op = random_operation();
             struct operation op_final = check_valid_and_go(op);
             post_min_area = count_min_area();
             if (pre_min_area <= post_min_area) { //probably accept
-                float acc_rate = exp((pre_min_area - post_min_area) / temperature);
-                if (((float)rand() / (float)RAND_MAX) <= acc_rate) {
+                double acc_rate = exp((pre_min_area - post_min_area) / temperature);
+                if (((double)rand() / (double)RAND_MAX) <= acc_rate) {
                     accept_under_currentT++;
                     total_under_currentT++;
                 } else {
@@ -87,13 +88,11 @@ namespace {
         }
 
         void cool_down_by_ratio() {
-            std::cout << "current area : " << count_min_area() << endl;
             temperature = temperature * (1 - cooldown_speed);
             accept_under_currentT = total_under_currentT = 0;
         }
 
         void cool_down_by_speed() {
-            std::cout << "current area : " <<  count_min_area() << endl;
             temperature = temperature - cooldown_speed;
             accept_under_currentT = total_under_currentT = 0;
         }
@@ -108,6 +107,7 @@ namespace {
 
         void print_current_solution() {
             std::cout << "minimum area is " << best_solution << endl;
+            std::cout << "utility is " << (double)tot_block_area / best_solution << endl;
         }
 
     private:
@@ -120,21 +120,30 @@ namespace {
             return t.print_tree(os, 2);
         }
 
+        int count_tot_block_area() {
+            int area = 0;
+            for (auto it : vbuf_) {
+                if (it->type == combine_type::LEAF) {
+                    area += (it->points)[0].first * (it->points)[0].second;
+                }
+            }
+            return area;
+        }
+
         void init_vbuf() {
             const_iterator it = vtree_.begin();
             balance_minstep = 0;
             while (it != vtree_.end()) {
                 vbuf_.push_back(it);
                 it++;
-                balance_minstep++;
+                balance_minstep += 40;
             }
             std::cout << vbuf_.size() << endl;
-            // vbuf_.assign(vtree_.begin(), vtree_.end());
         }
 
-        float count_init_temprature(float init_accept_rate) {
-            float init_min_area = count_min_area();
-            float post_min_area, total_drop;
+        double count_init_temprature(double init_accept_rate) {
+            int init_min_area = count_min_area();
+            int post_min_area, total_drop;
             int N = 100;
             for (int i = 0; i < N; i++) {
                 struct operation op = random_operation();
@@ -147,9 +156,9 @@ namespace {
             return - total_drop / (100 * log(init_accept_rate));
         }
 
-        float count_min_area() {
+        int count_min_area() {
             // print_coord_list((std::prev(vbuf_in.end()))->points);
-            float min_area = -1;
+            int min_area = -1;
             for (auto &&e : vbuf_.back()->points) {
                 if (e.first * e.second < min_area || min_area < 0) {
                     min_area = e.first * e.second;
@@ -246,7 +255,7 @@ namespace {
         float temperature, cooldown_speed;
         int accept_under_currentT, total_under_currentT;
         float ending_temperature;
-        float best_solution;
+        int best_solution, tot_block_area;
         int balance_minstep;
     };
 

@@ -91,12 +91,12 @@ namespace {
         polish::vectorized_polish_tree<> vtree;
         auto module_index = interpreter.make_module_index();
         default_random_engine eng;  // (random_device{}()); // TODO: turn this on later
-        vtree.construct(interpreter.modules().cbegin(), 
+        vtree.construct(interpreter.modules().cbegin(),
             module_index.cbegin(), module_index.cend(), eng);
         cout << distance(vtree.begin(), vtree.end()) << endl;
         if (!vtree.check_integrity())
             cout << "Boom!" << endl;
-        float init_accept_rate = 0.9, cooldown_speed = 0.05, ending_temperature = 20;
+        double init_accept_rate = 0.9, cooldown_speed = 0.05, ending_temperature = 20;
         SA sa(&vtree, init_accept_rate, cooldown_speed, ending_temperature);
         while (!sa.reach_end()) {
             while (!sa.reach_balance()) {
