@@ -268,19 +268,19 @@ namespace seqpair {
         }
 
         friend std::istream &operator>>(std::istream &in, Layout<Alloc> &layout) {
-            return layout._read(in);
+            return layout.read(in);
         }
 
         friend std::ostream &operator<<(std::ostream &out, const Layout<Alloc> &layout) {
-            return layout._print(out, format_policy::delim);
+            return layout.print(out, format_policy::delim);
         }
 
         friend std::ostream &operator<<(std::ostream &out, const formatted &formatted) {
-            return formatted.layout._print(out, formatted.policy);
+            return formatted.layout.print(out, formatted.policy);
         }
 
     protected:
-        std::istream &_read(std::istream &in) {
+        std::istream &read(std::istream &in) {
             Rect r;
             while (in >> r) {
                 base_t::x_.push_back(r.pos.x);
@@ -291,7 +291,7 @@ namespace seqpair {
             return in;
         }
 
-        std::ostream &_print(std::ostream &out, format_policy policy) const {
+        std::ostream &print(std::ostream &out, format_policy policy) const {
             int x, y, w, h;
             BOOST_FOREACH(boost::tie(x, y, w, h),
                 boost::combine(base_t::x_, base_t::y_, widths_, heights_))

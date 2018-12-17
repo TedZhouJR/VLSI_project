@@ -19,17 +19,13 @@ namespace seqpair {
 
 #ifndef SEQPAIR_IO_INLINE
     std::istream &operator>>(std::istream &in, Rect &r) {
-        in >> r.pos.x >> r.pos.y;
-        int right, top;
-        in >> right >> top;
-        r.width = right - r.left();
-        r.height = top - r.bottom();
+        in >> r.pos.x >> r.pos.y >> r.width >> r.height;
         return in;
     }
 
     std::ostream &operator<<(std::ostream &out, const Rect &r) {
-        return out << "(" << r.pos.x << ", " << r.pos.y << ") - (" <<
-            r.pos.x + r.width << ", " << r.pos.y + r.height << ")";
+        return out << "(" << r.pos.x << "," << r.pos.y << ") " <<
+            r.width << "*" << r.height;
     }
 
     std::ostream &operator<<(std::ostream &out, const typename Rect::formatted &r) {
@@ -38,7 +34,7 @@ namespace seqpair {
             out << rect;
         } else {
             out << rect.pos.x << " " << rect.pos.y << " " <<
-                rect.pos.x + rect.width << " " << rect.pos.y + rect.height;
+                rect.width << " " << rect.height;
         }
         return out;
     }
