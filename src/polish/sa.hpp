@@ -44,10 +44,11 @@ namespace {
         using vctr_tree_type = polish::vectorized_polish_tree<>;
         using const_iterator = typename vctr_tree_type::const_iterator;
 
-        SA(vctr_tree_type* vtree_in, double init_accept_rate, double cooldown_speed_in, double ending_temperature_in)
+        SA(vctr_tree_type* vtree_in, int best_curve_in, double init_accept_rate, double cooldown_speed_in, double ending_temperature_in)
         : /*eng_(std::random_device{}()), */line_(80, '-') {
             vtree_ = *vtree_in;
-            srand((unsigned)time(NULL));
+            // srand((unsigned)time(NULL));
+            srand(1);
             init_vbuf();
             temperature = count_init_temprature(init_accept_rate);
             std::cout << "init temperature " << temperature << endl;
@@ -56,6 +57,7 @@ namespace {
             ending_temperature = ending_temperature_in;
             best_solution = -1;
             tot_block_area = count_tot_block_area();
+            best_curve = best_curve_in;
         }
 
         void take_step() {
@@ -103,9 +105,18 @@ namespace {
             print_tree(vtree_);
         }
 
-        void print_current_solution() {
+        double print_current_solution() {
             std::cout << "minimum area is " << best_solution << endl;
             std::cout << "utility is " << (double)tot_block_area / best_solution << endl;
+            return (double)tot_block_area / best_solution;
+        }
+
+        vctr_tree_type show_best_tree () {
+            return best_tree;
+        }
+
+        int show_best_curve() {
+            return best_curve;
         }
 
     private:
@@ -154,15 +165,18 @@ namespace {
 
         int count_min_area() {
             // print_coord_list((std::prev(vbuf_in.end()))->points);
-            int min_area = -1;
+            int min_area = -1, curve_index = 0, sub_best_curve;
             for (auto &&e : vbuf_.back()->points) {
                 if (e.first * e.second < min_area || min_area < 0) {
                     min_area = e.first * e.second;
+                    best_curve = curve_index;
                 }
+                curve_index++;
             }
             if (min_area < best_solution || best_solution < 0) {
                 best_solution = min_area;
                 best_buf = vbuf_;
+                best_curve = sub_best_curve;
                 best_tree = vtree_;
             }
             return min_area;
@@ -251,7 +265,7 @@ namespace {
         float temperature, cooldown_speed;
         int accept_under_currentT, total_under_currentT;
         float ending_temperature;
-        int best_solution, tot_block_area;
+        int best_solution, best_curve, tot_block_area;
         int balance_minstep;
     };
 

@@ -25,6 +25,29 @@ using namespace seqpair;
 namespace po = boost::program_options;
 
 namespace {
+    using dimension_type = typename polish::basic_polish_node::dimension_type;
+    using vtree_type = typename polish::vectorized_polish_tree<>;
+    bool intersects(dimension_type lo0, dimension_type hi0,
+        dimension_type lo1, dimension_type hi1) {
+        return (lo0 < hi1) ^ (lo1 >= hi0);
+    }
+
+    bool intersects(const typename vtree_type::floorplan_entry &a,
+        const typename vtree_type::floorplan_entry &b) {
+        return intersects(get<0>(a), get<0>(a) + get<2>(a),
+            get<0>(b), get<0>(b) + get<2>(b))
+            && intersects(get<1>(a), get<1>(a) + get<3>(a),
+                get<1>(b), get<1>(b) + get<3>(b));
+    }
+
+    template<typename FwdIt>
+    bool check_intersection(FwdIt first, FwdIt last) {
+        for (auto i = first; i != last; ++i)
+            for (auto j = std::next(i); j != last; ++j)
+                if (intersects(*i, *j))
+                    return false;
+        return true;
+    }
 
     template<typename Generator, typename Alloc, typename FwdIt>
     void run_packer(SaPacker<Generator> &packer, Layout<Alloc> &layout,
@@ -89,6 +112,7 @@ namespace {
     void run_vectorized_polish_tree(const yal::Interpreter &interpreter) {
         cout << "Start simulate anneal..." << endl;
         polish::vectorized_polish_tree<> vtree;
+        std::vector<typename polish::vectorized_polish_tree<>::floorplan_entry> result;
         auto module_index = interpreter.make_module_index();
         default_random_engine eng;  // (random_device{}()); // TODO: turn this on later
         vtree.construct(interpreter.modules().cbegin(),
@@ -96,17 +120,35 @@ namespace {
         cout << distance(vtree.begin(), vtree.end()) << endl;
         if (!vtree.check_integrity())
             cout << "Boom!" << endl;
-        double init_accept_rate = 0.9, cooldown_speed = 0.05, ending_temperature = 20;
-        SA sa(&vtree, init_accept_rate, cooldown_speed, ending_temperature);
-        while (!sa.reach_end()) {
-            while (!sa.reach_balance()) {
-                sa.take_step();
+        double init_accept_rate = 0.95, cooldown_speed = 0.01, ending_temperature = 20;
+        int utility_stable = 0, pre_utility = 0, utility, best_curve;
+        while (utility_stable < 1) {
+            SA sa(&vtree, best_curve, init_accept_rate, cooldown_speed, ending_temperature);
+            while (!sa.reach_end()) {
+                while (!sa.reach_balance()) {
+                    sa.take_step();
+                }
+                sa.cool_down_by_ratio();
+                // cout << "cool down" << endl;
             }
-            sa.cool_down_by_ratio();
-            // cout << "cool down" << endl;
+            utility = sa.print_current_solution();
+            if (pre_utility == utility) {
+                utility_stable++;
+            } else {
+                utility_stable = 0;
+            }
+            vtree = sa.show_best_tree();
+            best_curve = sa.show_best_curve();
+            pre_utility = utility;
         }
+        vtree.floorplan(best_curve, back_inserter(result));
+        for (auto &&e: result) {
+            std::cout << std::get<0>(e) << " " << std::get<1>(e) << " " << std::get<2>(e) << " " << std::get<3>(e) << std::endl;
+        }
+        std::cout << "check_integrity is " << vtree.check_integrity() << endl;
+        if (!check_intersection(result.begin(), result.end()))
+            std::cout << "intersections error!!" << std::endl;
         //sa.print();
-        sa.print_current_solution();
         //cout << "passed, result is : " << sa.current_solution() << endl;
     }
 
