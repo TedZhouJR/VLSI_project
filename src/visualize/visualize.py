@@ -12,7 +12,9 @@ with open(file_path + file_name, 'r') as f:
     while line:
         line = f.readline()
         blocks.append(line[:-1].split(' '))
-    blocks.remove([''])
+
+    if [''] in blocks:
+        blocks.remove([''])
 
     print("data loaded, start to paint...")
 
