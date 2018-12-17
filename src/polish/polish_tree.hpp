@@ -578,6 +578,7 @@ namespace polish {
         using typename base::traits;
         using typename base::alloc_traits;
         using typename base::node_type;
+        using typename base::actual_allocator_type;
 
     public:
         using typename base::combine_type;
@@ -654,6 +655,7 @@ namespace polish {
         using typename base::traits;
         using typename base::alloc_traits;
         using typename base::node_type;
+        using typename base::actual_allocator_type;
 
     public:
         using typename base::combine_type;
