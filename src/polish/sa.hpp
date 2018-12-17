@@ -44,8 +44,7 @@ namespace {
         using vctr_tree_type = polish::vectorized_polish_tree<>;
         using const_iterator = typename vctr_tree_type::const_iterator;
 
-        SA(vctr_tree_type* vtree_in, float init_accept_rate, float cooldown_speed_in,
-            int balance_minstep_in, float ending_temperature_in)
+        SA(vctr_tree_type* vtree_in, float init_accept_rate, float cooldown_speed_in, float ending_temperature_in)
         : /*eng_(std::random_device{}()), */line_(80, '-') {
             vtree_ = *vtree_in;
             srand((unsigned)time(NULL));
@@ -56,7 +55,6 @@ namespace {
             std::cout << "init temperature " << temperature << endl;
             cooldown_speed = cooldown_speed_in;
             accept_under_currentT = total_under_currentT = 0;
-            balance_minstep = balance_minstep_in;
             ending_temperature = ending_temperature_in;
             best_solution = -1;
         }
@@ -124,32 +122,14 @@ namespace {
 
         void init_vbuf() {
             const_iterator it = vtree_.begin();
+            balance_minstep = 0;
             while (it != vtree_.end()) {
                 vbuf_.push_back(it);
                 it++;
+                balance_minstep++;
             }
             std::cout << vbuf_.size() << endl;
             // vbuf_.assign(vtree_.begin(), vtree_.end());
-        }
-
-        void load_tree() {
-            yal::Module m;
-            m.xpos.push_back(0);
-            m.ypos.push_back(0);
-            m.xpos.push_back(30);
-            m.ypos.push_back(20);
-            modules_.assign(12, m);
-            expr_ = {
-                0, 1, expression::COMBINE_VERTICAL,
-                2, 3, expression::COMBINE_VERTICAL, 4, 5,
-                expression::COMBINE_VERTICAL, expression::COMBINE_VERTICAL,
-                expression::COMBINE_VERTICAL,
-                6, 7, expression::COMBINE_VERTICAL,
-                8, 9, expression::COMBINE_VERTICAL, 10, 11,
-                expression::COMBINE_VERTICAL, expression::COMBINE_VERTICAL,
-                expression::COMBINE_VERTICAL, expression::COMBINE_VERTICAL
-            };
-            vtree_.construct(modules_, expr_);
         }
 
         float count_init_temprature(float init_accept_rate) {
