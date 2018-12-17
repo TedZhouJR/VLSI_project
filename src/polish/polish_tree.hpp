@@ -322,14 +322,44 @@ namespace polish {
             attach_left(header(), new_root);
         }
 
-        //void assign(const_iterator first, const_iterator last) {
-        //    std::vector<node_type *> stack;
-        //    for (; first != last; ++first) {
+        template<typename InIt>
+        bool assign(InIt first_iter, InIt last_iter) {
+            std::vector<node_type *> stack;
+            if (std::is_convertible<
+                typename std::iterator_traits<InIt>::iterator_category,
+                std::forward_iterator_tag>::value)
+                stack.reserve(std::distance(first_iter, last_iter) / 2 + 1);
+            bool pass = true;
 
-
-        //    }
-        //    asser
-        //}
+            for (; first_iter != last_iter; ++first_iter) {
+                node_type *src = get_iter_pointer(*first_iter);
+                if (src->type == meta_polish_node::combine_type::LEAF) {
+                    node_type *dst = copy_node(src);
+                    dst->lc() = dst->rc() = nullptr;
+                    stack.push_back(dst);
+                } else {
+                    if (stack.size() < 2) {
+                        pass = false;
+                        break;
+                    }
+                    node_type *dst = copy_node(src);
+                    attach_right(dst, stack.back());
+                    stack.pop_back();
+                    attach_left(dst, stack.back());
+                    stack.back() = dst;
+                } 
+            }
+            
+            pass = pass && stack.size() == 1;
+            if (pass) {
+                clear();
+                attach_left(header(), stack.back());
+            } else {
+                for (node_type *t : stack)
+                    clear_tree(t);
+            }
+            return pass;
+        }
 
         void clear() {
             clear_tree(header()->lc());

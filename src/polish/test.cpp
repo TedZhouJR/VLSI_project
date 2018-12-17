@@ -14,6 +14,7 @@
 #include <iterator>
 #include <numeric>
 #include <random>
+#include <sstream>
 #include <string>
 
 #include "polish_tree.hpp"
@@ -282,6 +283,27 @@ BOOST_FIXTURE_TEST_CASE(test_tree_shuffle, BasicFixture) {
         BOOST_TEST((std::distance(tree.begin(),
             tree.end()) == 2 * modules.size() - 1));
         BOOST_TEST((test_normalized(tree)));
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(test_tree_assign, BasicFixture) {
+    tree_type t;
+    vector<typename tree_type::const_iterator> iters;
+    for (size_t cnt = 0; cnt != 2; ++cnt) {
+        iters.clear();
+        t.clear();
+        if (cnt & 1)
+            t.construct(modules, expr);
+        for (auto i = t.begin(); i != t.end(); ++i)
+            iters.push_back(i);
+        tree_type t2;
+        t2.assign(iters.cbegin(), iters.cend());
+        BOOST_TEST((t2.check_integrity()));
+        BOOST_TEST((test_traversal(t2)));
+        ostringstream s1, s2;
+        t.print_tree(s1);
+        t2.print_tree(s2);
+        BOOST_TEST((s1.str() == s2.str()));
     }
 }
 

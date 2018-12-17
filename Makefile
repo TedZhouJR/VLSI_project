@@ -40,7 +40,7 @@ SEQPAIR_TARGET = $(BIN_DIR)/seq_pair
 
 TARGET_LIST = $(TARGET) $(POLISH_TEST) $(YAL_TARGET) $(SEQPAIR_TARGET)
 
-.PHONY: all, clean
+.PHONY: all, clean, lexyacc
 
 all: $(TARGET_LIST)
 
@@ -56,6 +56,8 @@ $(YAL_BIN_DIR)/%.o: $(YAL_SRC_DIR)/%.cpp
 
 $(SEQPAIR_BIN_DIR)/%.o: $(SEQPAIR_SRC_DIR)/%.cpp
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $^ -I $(AURELIANO_SRC_DIR) -I $(YAL_SRC_DIR) -o $@
+
+lexyacc: $(YAL_SRC_DIR)/scanner.cpp $(YAL_SRC_DIR)/parser.cpp
 
 $(YAL_SRC_DIR)/scanner.cpp: $(YAL_SRC_DIR)/scanner.l
 	flex -o $@ $<
