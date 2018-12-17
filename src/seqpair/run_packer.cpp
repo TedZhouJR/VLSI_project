@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 
 #include <boost/program_options.hpp>
 #include <boost/pool/pool_alloc.hpp>
@@ -17,6 +18,7 @@
 #include "pack_generator.h"
 #include "sa_packer.h"
 #include "verification.h"
+#include "interpreter.h"
 
 using namespace std;
 using namespace seqpair;
@@ -74,6 +76,16 @@ namespace {
         out << layout.format(format_policy::no_delim);
     }
 
+    unordered_map<string, size_t> make_modulename_index(const yal::Interpreter &i) {
+        unordered_map<string, size_t> map;
+        map.reserve(i.modules().size());
+        size_t cnt = 0;
+        for (const yal::Module &m : i.modules()) {
+            map.emplace(m.name, cnt++);
+        }
+        return map;
+    }
+
 }
 
 int main(int argc, char **argv) {
@@ -111,16 +123,27 @@ int main(int argc, char **argv) {
             if (method != "lcs" && method != "dag")
                 throw runtime_error("Unrecognized method: " + method);
         }
-
-        Layout<> layout;
+        
+        yal::Interpreter interpreter;
+        ifstream fin;
         if (vm.count("input")) {
             auto &&v = vm["input"].as<vector<string>>();
-            ifstream in(vm["input"].as<vector<string>>().back());
-            if (!in.is_open())
+            fin.open(vm["input"].as<vector<string>>().back());
+            if (!fin.is_open())
                 throw runtime_error("Cannot open file");
-            in >> layout;
-        } else {
-            cin >> layout;
+            interpreter.switch_input_stream(fin);
+        } 
+        interpreter.parse();
+
+        unordered_map<string, size_t> name_map = make_modulename_index(interpreter);
+        Layout<> layout;
+        for (const auto &e : interpreter.parent_module().network) {
+            string name = yal::ParentModule::get_module_name(e);
+            auto it = name_map.find(name);
+            if (it == name_map.end())
+                throw runtime_error("Invalid module name: " + name);
+            const yal::Module &m = interpreter.modules()[it->second];
+            layout.push(m.xspan(), m.yspan());
         }
 
         SaPackerBase::options_t opts;
