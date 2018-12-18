@@ -111,24 +111,25 @@ namespace {
         return map;
     }
 
-    void run_vectorized_polish_tree(const yal::Interpreter &interpreter, 
+    void run_vectorized_polish_tree(const yal::Interpreter &interpreter,
         int rounds, std::ostream &out) {
         cerr <<  "Start simulate anneal..." << endl;
         vtree_type vtree;
         std::vector<typename polish::vectorized_polish_tree<>::floorplan_entry> result;
         auto module_index = interpreter.make_module_index();
-        default_random_engine eng(random_device{}()); 
+        default_random_engine eng(random_device{}());
         vtree.construct(interpreter.modules().cbegin(),
             module_index.cbegin(), module_index.cend(), eng);
-        double init_accept_rate = 0.95, cooldown_speed = 0.01, ending_temperature = 20;
-        int utility_stable = 0, pre_utility = 0, utility, best_curve;
+        double init_accept_rate = 0.95, cooldown_ratio = 0.008, cooldown_speed = 0.01, ending_temperature = 20;
+        int utility_stable = 0, best_curve;
+        double pre_utility = 0, utility;
         while (utility_stable < rounds) {
-            SA sa(&vtree, best_curve, init_accept_rate, cooldown_speed, ending_temperature);
+            SA sa(&vtree, best_curve, init_accept_rate, cooldown_ratio, cooldown_speed, ending_temperature);
             while (!sa.reach_end()) {
                 while (!sa.reach_balance()) {
                     sa.take_step();
                 }
-                sa.cool_down_by_ratio();
+                sa.cool_down_by_both();
                 // cerr <<  "cool down" << endl;
             }
             utility = sa.print_current_solution();
