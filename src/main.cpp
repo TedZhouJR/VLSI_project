@@ -71,9 +71,9 @@ namespace {
         });
 
         cerr << "\n";
-        cerr << "Runtime: " <<
-            chrono::duration_cast<chrono::milliseconds>(runtime).count() <<
-            "ms" << "\n";
+        cerr << "Runtime: " << static_cast<double>(
+            chrono::duration_cast<chrono::milliseconds>(runtime).count()) / 1000 <<
+            "s" << "\n";
         auto sum_rect_areas = layout.sum_conponent_areas();
         cerr << "Sum of rectangle areas: " << sum_rect_areas << "\n";
         auto sln_area = layout.get_area();
@@ -224,7 +224,13 @@ int main(int argc, char **argv) {
             }
             cerr << "Rounds: " << rounds << endl;
 
-            run_vectorized_polish_tree(interpreter, rounds, *out);
+            auto runtime = aureliano::timeit([&] {
+                run_vectorized_polish_tree(interpreter, rounds, *out);
+            });
+
+            cerr << "Runtime: " << static_cast<double>(
+                    chrono::duration_cast<chrono::milliseconds>(runtime).count()) / 1000 <<
+                "s" << "\n";
 
         } else {
             // LCS or DAG

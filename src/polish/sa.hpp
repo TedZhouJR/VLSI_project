@@ -144,7 +144,8 @@ namespace {
 
         double count_init_temprature(double init_accept_rate) {
             int init_min_area = count_min_area();
-            int post_min_area, total_drop;
+            int post_min_area;
+            int64_t total_drop;
             int N = 100;
             for (int i = 0; i < N; i++) {
                 struct operation op = random_operation();
@@ -153,6 +154,8 @@ namespace {
                 total_drop += abs(init_min_area - post_min_area);
                 goto_neighbor(op_final);   //recover previous state
             }
+            AURELIANO_PRINT_EXPRS(total_drop) << endl;
+            AURELIANO_PRINT_EXPRS(init_accept_rate) << endl;
             return - total_drop / (100 * log(init_accept_rate));
         }
 
