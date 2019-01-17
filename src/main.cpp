@@ -114,26 +114,27 @@ namespace {
         return map;
     }
 
-    void run_vectorized_polish_tree(const yal::Interpreter &interpreter, 
+    void run_vectorized_polish_tree(const yal::Interpreter &interpreter,
         int rounds, std::ostream &out) {
         using namespace polish;
         cerr <<  "Start simulate annealing..." << endl;
         vtree_type vtree;
         auto module_index = interpreter.make_module_index();
-        default_random_engine eng(random_device{}()); 
+        default_random_engine eng(random_device{}());
         vtree.construct(interpreter.modules().cbegin(),
             module_index.cbegin(), module_index.cend(), eng);
 
-        double init_accept_rate = 0.95, cooldown_speed = 0.01, ending_temperature = 20;
+        double init_accept_rate = 0.95, cooldown_ratio = 0.008, 
+            cooldown_speed = 0.01, ending_temperature = 20;
         std::int64_t utility_stable = 0, pre_utility = 0, utility = 0;
         while (utility_stable < rounds) {
-            SA<vtree_type> sa(vtree, init_accept_rate,
+            SA<vtree_type> sa(vtree, init_accept_rate, cooldown_ratio,
                 cooldown_speed, ending_temperature, eng);
             while (!sa.reach_end()) {
                 while (!sa.reach_balance()) {
                     sa.take_step(eng);
                 }
-                sa.cool_down_by_ratio();
+                sa.cool_down_by_both();
             }
             sa.print_statistics();
             utility = sa.get_best_area();
@@ -169,16 +170,17 @@ namespace {
         tree.construct(interpreter.modules().cbegin(),
             module_index.cbegin(), module_index.cend(), eng);
 
-        double init_accept_rate = 0.95, cooldown_speed = 0.01, ending_temperature = 20;
+        double init_accept_rate = 0.95, cooldown_ratio = 0.008, 
+            cooldown_speed = 0.01, ending_temperature = 20;
         std::int64_t utility_stable = 0, pre_utility = 0, utility = 0;
         while (utility_stable < rounds) {
-            SA<tree_type> sa(tree, init_accept_rate,
+            SA<tree_type> sa(tree, init_accept_rate, cooldown_ratio,
                 cooldown_speed, ending_temperature, eng);
             while (!sa.reach_end()) {
                 while (!sa.reach_balance()) {
                     sa.take_step(eng);
                 }
-                sa.cool_down_by_ratio();
+                sa.cool_down_by_both();
             }
             sa.print_statistics();
             utility = sa.get_best_area();

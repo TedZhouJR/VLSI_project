@@ -1,5 +1,4 @@
-// test.cpp: testcases for slicing tree.
-// Author: LYL
+#pragma once
 
 #include <algorithm>
 #include <cassert>
@@ -36,16 +35,15 @@ namespace polish {
                 boost::fast_pool_allocator<polish::meta_polish_node::coord_type>>>>;
             using const_iterator = typename vctr_tree_type::const_iterator;
 
-            SA(vctr_tree_type* vtree_in, int best_curve_in, double init_accept_rate, double cooldown_speed_in, double ending_temperature_in)
-            {
-                using namespace std;
+            SA(vctr_tree_type* vtree_in, int best_curve_in, double init_accept_rate, double cooldown_ratio_in,
+                double cooldown_speed_in, double ending_temperature_in) {
                 vtree_ = *vtree_in;
                 srand((unsigned)time(NULL));
-                srand(1);
                 init_vbuf();
                 temperature = count_init_temprature(init_accept_rate);
                 std::cerr << "init temperature " << temperature << endl;
                 cooldown_speed = cooldown_speed_in;
+                cooldown_ratio = cooldown_ratio_in;
                 accept_under_currentT = total_under_currentT = 0;
                 ending_temperature = ending_temperature_in;
                 best_solution = -1;
@@ -81,12 +79,17 @@ namespace polish {
             }
 
             void cool_down_by_ratio() {
-                temperature = temperature * (1 - cooldown_speed);
+                temperature = temperature * (1 - cooldown_ratio);
                 accept_under_currentT = total_under_currentT = 0;
             }
 
             void cool_down_by_speed() {
                 temperature = temperature - cooldown_speed;
+                accept_under_currentT = total_under_currentT = 0;
+            }
+
+            void cool_down_by_both() {
+                temperature = temperature * (1 - cooldown_ratio) - cooldown_speed;
                 accept_under_currentT = total_under_currentT = 0;
             }
 
@@ -145,7 +148,7 @@ namespace polish {
             double count_init_temprature(double init_accept_rate) {
                 int init_min_area = count_min_area();
                 int post_min_area;
-                int64_t total_drop;
+                int64_t total_drop = 0;
                 int N = 100;
                 for (int i = 0; i < N; i++) {
                     struct operation op = random_operation();
@@ -154,9 +157,6 @@ namespace polish {
                     total_drop += abs(init_min_area - post_min_area);
                     goto_neighbor(op_final);   //recover previous state
                 }
-                AURELIANO_PRINT_EXPRS(total_drop) << std::endl;
-                AURELIANO_PRINT_EXPRS(init_accept_rate) << std::endl;
-                return -total_drop / (100 * log(init_accept_rate));
             }
 
             int count_min_area() {
@@ -254,7 +254,7 @@ namespace polish {
 
             std::vector<const_iterator> vbuf_, best_buf;
             vctr_tree_type vtree_, best_tree;
-            float temperature, cooldown_speed;
+            float temperature, cooldown_speed, cooldown_ratio;
             int accept_under_currentT, total_under_currentT;
             float ending_temperature;
             int best_solution, best_curve, tot_block_area;
@@ -400,11 +400,12 @@ namespace polish {
             using tree_type = Tree;
 
             template<typename Eng>
-            SA(const tree_type &vtree_in, 
-                double init_accept_rate, double cooldown_speed_in,
+            SA(const tree_type &vtree_in, double init_accept_rate, 
+                double cooldown_ratio_in, double cooldown_speed_in,
                 double ending_temperature_in, Eng &&eng,
                 std::ostream &out = std::cerr) :
                 tree(vtree_in), best_tree(vtree_in), os(&out), 
+                cooldown_ratio(cooldown_ratio_in),
                 cooldown_speed(cooldown_speed_in), 
                 ending_temperature(ending_temperature_in),
                 accept_under_currentT(0), total_under_currentT(0),
@@ -447,8 +448,8 @@ namespace polish {
                 return accept_under_currentT > balance_minstep;
             }
 
-            void cool_down_by_ratio() noexcept {
-                temperature = temperature * (1 - cooldown_speed);
+            void cool_down_by_both() noexcept {
+                temperature = temperature * (1 - cooldown_ratio) - cooldown_speed;
                 accept_under_currentT = total_under_currentT = 0;
             }
 
@@ -594,7 +595,7 @@ namespace polish {
 
             std::vector<const_iterator> expr;
             tree_type tree, best_tree;
-            double temperature, cooldown_speed, ending_temperature;
+            double temperature, cooldown_ratio, cooldown_speed, ending_temperature;
             int accept_under_currentT, total_under_currentT, balance_minstep;
             area_type best_solution;
             std::ostream *os;
