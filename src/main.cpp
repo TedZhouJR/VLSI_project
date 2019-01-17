@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 
+#include <boost/interprocess/sync/null_mutex.hpp>
 #include <boost/program_options.hpp>
 #include <boost/pool/pool_alloc.hpp>
 
@@ -16,6 +17,7 @@
 #include "layout.h"
 #include "pack_generator.h"
 #include "sa_packer.h"
+#include "verify.hpp"
 #include "verification.h"
 #include "interpreter.h"
 #include "sa.hpp"
@@ -24,32 +26,33 @@ using namespace std;
 using namespace seqpair;
 namespace po = boost::program_options;
 
+using combine_type = polish::meta_polish_node::combine_type;
+using dimension_type = polish::meta_polish_node::dimension_type;
+using vtree_type = polish::vectorized_polish_tree<
+    boost::fast_pool_allocator<
+        polish::basic_vectorized_polish_node<
+            boost::fast_pool_allocator<polish::meta_polish_node::coord_type, 
+            boost::default_user_allocator_new_delete,
+            boost::interprocess::null_mutex>
+        >, 
+        boost::default_user_allocator_new_delete,
+        boost::interprocess::null_mutex
+    >
+>;
+using tree_type = polish::polish_tree<
+    boost::fast_pool_allocator<
+        polish::basic_polish_node, 
+        boost::default_user_allocator_new_delete,
+        boost::interprocess::null_mutex
+    >
+>;
+using char_allocator = boost::fast_pool_allocator<
+    char,
+    boost::default_user_allocator_new_delete,
+    boost::interprocess::null_mutex
+>;
+
 namespace {
-    using dimension_type = typename polish::basic_polish_node::dimension_type;
-    using vtree_type = polish::vectorized_polish_tree<
-        boost::fast_pool_allocator<polish::basic_vectorized_polish_node<
-        boost::fast_pool_allocator<meta_polish_node::coord_type>>>>;
-    bool intersects(dimension_type lo0, dimension_type hi0,
-        dimension_type lo1, dimension_type hi1) {
-        return (lo0 < hi1) ^ (lo1 >= hi0);
-    }
-
-    bool intersects(const typename vtree_type::floorplan_entry &a,
-        const typename vtree_type::floorplan_entry &b) {
-        return intersects(get<0>(a), get<0>(a) + get<2>(a),
-            get<0>(b), get<0>(b) + get<2>(b))
-            && intersects(get<1>(a), get<1>(a) + get<3>(a),
-                get<1>(b), get<1>(b) + get<3>(b));
-    }
-
-    template<typename FwdIt>
-    bool check_intersection(FwdIt first, FwdIt last) {
-        for (auto i = first; i != last; ++i)
-            for (auto j = std::next(i); j != last; ++j)
-                if (intersects(*i, *j))
-                    return false;
-        return true;
-    }
 
     template<typename Generator, typename Alloc, typename FwdIt>
     void run_packer(SaPacker<Generator> &packer, Layout<Alloc> &layout,
@@ -60,8 +63,7 @@ namespace {
 
         cerr << packer.options();
 
-        // Change distribution and runtime allocator
-        // Note: maybe pool_options can be specified
+        // Change distribution 
         PackGeneratorBase::default_change_distribution chg_dist;
 
         double cost = 0;
@@ -89,7 +91,8 @@ namespace {
         cerr << "Cost: " << cost << "\n";
 
         auto alpha = packer.energy_function().alpha;
-        if (abs((alpha * sln_area.first * sln_area.second + (1 - alpha) * wirelen) / cost - 1) > 1e-5)
+        if (abs((alpha * sln_area.first * sln_area.second 
+            + (1 - alpha) * wirelen) / cost - 1) > 1e-5)
             cerr << "Wrong answer: incorrect cost." << "\n";
         else if (has_intersection(layout))
             cerr << "Wrong answer: layout contains intersections." << "\n";
@@ -113,44 +116,100 @@ namespace {
 
     void run_vectorized_polish_tree(const yal::Interpreter &interpreter, 
         int rounds, std::ostream &out) {
-        cerr <<  "Start simulate anneal..." << endl;
+        using namespace polish;
+        cerr <<  "Start simulate annealing..." << endl;
         vtree_type vtree;
-        std::vector<typename polish::vectorized_polish_tree<>::floorplan_entry> result;
         auto module_index = interpreter.make_module_index();
         default_random_engine eng(random_device{}()); 
         vtree.construct(interpreter.modules().cbegin(),
             module_index.cbegin(), module_index.cend(), eng);
+
         double init_accept_rate = 0.95, cooldown_speed = 0.01, ending_temperature = 20;
-        int utility_stable = 0, pre_utility = 0, utility, best_curve;
+        std::int64_t utility_stable = 0, pre_utility = 0, utility = 0;
         while (utility_stable < rounds) {
-            SA sa(&vtree, best_curve, init_accept_rate, cooldown_speed, ending_temperature);
+            SA<vtree_type> sa(vtree, init_accept_rate,
+                cooldown_speed, ending_temperature, eng);
             while (!sa.reach_end()) {
                 while (!sa.reach_balance()) {
-                    sa.take_step();
+                    sa.take_step(eng);
                 }
                 sa.cool_down_by_ratio();
-                // cerr <<  "cool down" << endl;
             }
-            utility = sa.print_current_solution();
+            sa.print_statistics();
+            utility = sa.get_best_area();
             if (pre_utility == utility) {
                 utility_stable++;
             } else {
                 utility_stable = 0;
             }
-            vtree = sa.show_best_tree();
-            best_curve = sa.show_best_curve();
+            vtree = sa.get_best_tree();
             pre_utility = utility;
         }
-        vtree.floorplan(best_curve, back_inserter(result));
+        
+        std::vector<typename vtree_type::floorplan_entry> result;
+        std::size_t best_point = SA<vtree_type>::get_best_point(vtree);
+        vtree.floorplan(best_point, back_inserter(result));
         for (auto &&e: result) {
-            out << std::get<0>(e) << " " << std::get<1>(e) << " " << std::get<2>(e) << " " << std::get<3>(e) << std::endl;
+            out << std::get<0>(e) << " " << std::get<1>(e) 
+                << " " << std::get<2>(e) << " " << std::get<3>(e) << std::endl;
         }
-        if (!check_intersection(result.begin(), result.end()))
-            std::cerr <<  "Intersections error!!" << std::endl;
+        if (polish::overlap(result.begin(), result.end()))
+            std::cerr << "Overlap error!!" << std::endl;
         else
-            std::cerr <<  "Answer accepted." << endl;
-        //sa.print();
-        //cerr <<  "passed, result is : " << sa.current_solution() << endl;
+            std::cerr << "Answer accepted." << std::endl;
+    }
+
+    void run_polish_tree(const yal::Interpreter &interpreter,
+        int rounds, std::ostream &out) {
+        using namespace polish;
+        cerr << "Start simulate annealing..." << endl;
+        tree_type tree;
+        auto module_index = interpreter.make_module_index();
+        default_random_engine eng(random_device{}());
+        tree.construct(interpreter.modules().cbegin(),
+            module_index.cbegin(), module_index.cend(), eng);
+
+        double init_accept_rate = 0.95, cooldown_speed = 0.01, ending_temperature = 20;
+        std::int64_t utility_stable = 0, pre_utility = 0, utility = 0;
+        while (utility_stable < rounds) {
+            SA<tree_type> sa(tree, init_accept_rate,
+                cooldown_speed, ending_temperature, eng);
+            while (!sa.reach_end()) {
+                while (!sa.reach_balance()) {
+                    sa.take_step(eng);
+                }
+                sa.cool_down_by_ratio();
+            }
+            sa.print_statistics();
+            utility = sa.get_best_area();
+            if (pre_utility == utility) {
+                utility_stable++;
+            } else {
+                utility_stable = 0;
+            }
+            tree = sa.get_best_tree();
+            pre_utility = utility;
+        }
+
+        std::vector<typename tree_type::floorplan_entry> result;
+        tree.floorplan(back_inserter(result));
+        std::vector<std::tuple<dimension_type, dimension_type,
+            dimension_type, dimension_type>> detailed_result;
+        detailed_result.reserve(result.size());
+        auto it = tree.begin();
+        for (auto &&e : result) {
+            detailed_result.emplace_back(std::get<0>(e), 
+                std::get<1>(e), it->width, it->height);
+            out << std::get<0>(e) << " " << std::get<1>(e) 
+                << " " <<  it->width << " " << it->height << std::endl;
+            do {
+                ++it;
+            } while (it != tree.end() && it->type != combine_type::LEAF);
+        }
+        if (polish::overlap(detailed_result.cbegin(), detailed_result.cend())) 
+            std::cerr << "Overlap error!!" << std::endl;
+        else
+            std::cerr << "Answer accepted." << std::endl;
     }
 
 }
@@ -165,11 +224,11 @@ int main(int argc, char **argv) {
         ("output,o", po::value< vector<string> >(),
             "output placement file (default cout)")
         ("rounds,r", po::value<int>()->default_value(10),
-            "rounds for polish")
+            "required stable rounds for polish-curve/polish to stop")
         ("option,O", po::value< vector<string> >(),
             "option file for lcs/dag")
         ("method,m", po::value< vector<string> >(),
-            "method (polish/lcs/dag, default polish)")
+            "method (polish-curve/polish/lcs/dag, default polish-curve)")
         ("verbose,v", po::value<int>()->default_value(1)->implicit_value(2),
             "verbose level (0-2)")
         ;
@@ -180,16 +239,17 @@ int main(int argc, char **argv) {
 
     if (vm.count("help")) {
         cerr <<  desc << "\n";
-        return 1;
+        return EXIT_SUCCESS;
     }
 
     try {
-        string method = "polish";
+        string method = "polish-curve";
         if (vm.count("method")) {
             method = vm["method"].as<vector<string>>().back();
             for (auto &e : method)
                 e = tolower(e);
-            if (method != "lcs" && method != "dag" && method != "polish")
+            if (method != "lcs" && method != "dag" 
+                && method != "polish" && method != "polish-curve")
                 throw runtime_error("Unrecognized method: " + method);
         }
 
@@ -207,6 +267,8 @@ int main(int argc, char **argv) {
         }
 
         interpreter.parse();
+        if (interpreter.parent_module().network.empty())
+            throw runtime_error("Modules empty!");
 
         ostream *out = &cout;
         ofstream fout;
@@ -215,18 +277,22 @@ int main(int argc, char **argv) {
             out = &fout;
         }
 
-        if (method == "polish") {
-            cerr <<  "Method: polish" << endl;
+        if (method == "polish" || method == "polish-curve") {
+            cerr <<  "Method: " << method << endl;
             int rounds = vm["rounds"].as<int>();
-            if (rounds < 0) {
-                cerr << "Warning: negative rounds argument; using 10." << endl;
+            if (rounds <= 0) {
+                cerr << "Warning: non-positive rounds argument; using 10." << endl;
                 rounds = 10;
             }
-            cerr << "Rounds: " << rounds << endl;
+            cerr << "Stable rounds: " << rounds << endl;
 
-            auto runtime = aureliano::timeit([&] {
-                run_vectorized_polish_tree(interpreter, rounds, *out);
-            });
+            auto runtime = method == "polish" ?
+                aureliano::timeit([&] { 
+                    run_polish_tree(interpreter, rounds, *out); 
+                }) :
+                aureliano::timeit([&] { 
+                    run_vectorized_polish_tree(interpreter, rounds, *out); 
+                });
 
             cerr << "Runtime: " << static_cast<double>(
                     chrono::duration_cast<chrono::milliseconds>(runtime).count()) / 1000 <<
@@ -265,13 +331,11 @@ int main(int argc, char **argv) {
 
             if (method == "dag") {
                 cerr << "Method: DAG" << "\n";
-                auto packer = makeSaPacker<
-                    DagPackGenerator<boost::fast_pool_allocator<char>>>(opts, func);
+                auto packer = makeSaPacker<DagPackGenerator<char_allocator>>(opts, func);
                 run_packer(packer, layout, begin(nets), end(nets), *out, verbose_level);
             } else if (method == "lcs") {
                 cerr << "Method: LCS" << "\n";
-                auto packer = makeSaPacker<
-                    LcsPackGenerator<boost::fast_pool_allocator<char>>>(opts, func);
+                auto packer = makeSaPacker<LcsPackGenerator<char_allocator>>(opts, func);
                 run_packer(packer, layout, begin(nets), end(nets), *out, verbose_level);
             } else {
                 assert(false);
